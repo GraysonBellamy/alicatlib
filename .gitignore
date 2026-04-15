@@ -1,0 +1,59 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+wheels/
+.eggs/
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# uv
+.uv-cache/
+
+# Tests / coverage
+.cache
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# Type checker / tools
+.pytype/
+.pyre/
+.dmypy.json
+dmypy.json
+
+# Docs
+site/
+/docs/_build/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Generated code (committed snapshot at src/alicatlib/registry/_codes_gen.py is
+# source-controlled, but tests may emit temporary files)
+/tmp/
+/_scratch/

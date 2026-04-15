@@ -1,0 +1,196 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "alicatlib"
+version = "0.1.0.dev0"
+description = "Python library for Alicat mass flow meters and controllers."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+authors = [{ name = "Grayson Bellamy", email = "gbellamy@umd.edu" }]
+keywords = ["alicat", "mass-flow", "serial", "instrument", "mfc", "mfm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AnyIO",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Hardware",
+    "Typing :: Typed",
+]
+dependencies = [
+    "anyio>=4.4",
+    "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+postgres = ["asyncpg>=0.30"]
+parquet = ["pyarrow>=16"]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
+]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "hypothesis>=6.112",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+    "trio>=0.27",
+]
+
+[project.urls]
+Homepage = "https://github.com/ulfsri/alicatlib"
+Repository = "https://github.com/ulfsri/alicatlib"
+Documentation = "https://ulfsri.github.io/alicatlib/"
+Issues = "https://github.com/ulfsri/alicatlib/issues"
+Changelog = "https://github.com/ulfsri/alicatlib/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/alicatlib"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/alicatlib/registry/data/codes.json" = "alicatlib/registry/data/codes.json"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/docs",
+    "/scripts",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/pyproject.toml",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "hypothesis>=6.112",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+    "trio>=0.27",
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # flake8-simplify
+    "ASYNC",# flake8-async (incl. ASYNC109 for asyncio.wait_for)
+    "PL",   # pylint
+    "PT",   # pytest-style
+    "RUF",  # ruff-specific
+    "D",    # pydocstyle
+    "N",    # pep8-naming
+    "S",    # flake8-bandit
+    "C4",   # flake8-comprehensions
+    "T20",  # flake8-print (no print in library)
+    "TID",  # flake8-tidy-imports
+    "TCH",  # flake8-type-checking
+]
+ignore = [
+    "D100",    # missing module docstring — tolerated for now on stubs
+    "D104",    # missing docstring in public package
+    "D105",    # magic method docstrings — __str__ / __repr__ rarely need docs
+    "D107",    # __init__ docstrings — class docstring covers it
+    "D203",    # incompatible with D211
+    "D213",    # incompatible with D212
+    "PLR0913", # too many args — common for device methods
+    "RUF002",  # ambiguous unicode in docstrings — en/em dashes are fine
+    "RUF003",  # ambiguous unicode in comments
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "S101", "PLR2004", "PLC0415"]
+"scripts/**" = ["D", "T20"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+disallow_any_unimported = true
+show_error_codes = true
+show_column_numbers = true
+pretty = true
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "hardware: requires a connected Alicat device (read-only)",
+    "hardware_stateful: changes device state (gas, setpoint, tare) — opt in via PYALICAT_ENABLE_STATEFUL_TESTS=1",
+    "hardware_destructive: destructive ops (factory reset, baud change, exhaust) — opt in via PYALICAT_ENABLE_DESTRUCTIVE_TESTS=1",
+    "slow: excluded from the fast CI run",
+]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "-m",
+    "not hardware and not hardware_stateful and not hardware_destructive",
+]
+filterwarnings = [
+    "error",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["alicatlib"]
+parallel = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
+
+[tool.coverage.paths]
+source = ["src/alicatlib", "*/site-packages/alicatlib"]

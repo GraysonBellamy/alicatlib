@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a new command, sink, transport, or behaviour
+labels: [enhancement]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Sketch the API. If it's a new Alicat command, cite the manual section.
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Tier (for new commands)
+      options:
+        - Tier 1 — core Alicat surface
+        - Tier 2 — follow-up
+        - Tier 3 — advanced / destructive
+        - n/a

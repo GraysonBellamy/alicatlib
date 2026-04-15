@@ -1,0 +1,41 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Include the exact exception type, message, and `ErrorContext` fields if available.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Ideally uses `FakeTransport` or a fixture, so we can reproduce without hardware.
+      render: python
+  - type: input
+    id: version
+    attributes:
+      label: alicatlib version
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+  - type: input
+    id: os
+    attributes:
+      label: OS
+  - type: input
+    id: device
+    attributes:
+      label: Device model and firmware (if hardware-related)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: DEBUG-level logs from `pyalicat.protocol` / `pyalicat.session` if available.
+      render: text
