@@ -1,0 +1,5 @@
+# scenario: VE query on a GP-family device
+# Synthetic. GP devices typically report no firmware date.
+
+> AVE
+< A GP

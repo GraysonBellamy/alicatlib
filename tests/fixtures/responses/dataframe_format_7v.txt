@@ -1,0 +1,39 @@
+# scenario: ??D* on a real V1_V7 controller (MCP-50SLPM-D, 7v09.0-R22)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud).
+#
+# Third V1_V7-family device captured (after 5v12 LEGACY and 6v21 V8+).
+# Confirms the dialect transition is per-firmware-version, not
+# per-firmware-family — 7v09 uses the same V8+ canonical dialect as
+# 6v21, even though both are V1_V7-family. The legacy LEGACY dialect
+# is bounded to 5v12-and-earlier (best evidence we have).
+#
+# Per-device variation observed:
+#   - D06 `Mass Flow Setpt` is `decimal` (unsigned) — same as 6v21.
+#     Older firmware unsigns the setpoint type.
+#   - D07 `Gas` WIDTH is `7/7` (a *two*-token width like the decimal
+#     `7/2` shape, not the single-token `7` on every other device).
+#     Likely means "7 chars, 7 max" but we don't currently parse
+#     the width field for content; recording the variant.
+#   - Other widths: `7/2` for vol/mass flow (matches 8v17/8v30/10v20).
+#   - Status flags: shorter than 10v20's list (no COM, GTA, P2O).
+
+> A??D*
+< A D00 ID_ NAME______________________ TYPE_______ WIDTH NOTES___________________
+< A D01 700 Unit ID                    string          1
+< A D02 002 Abs Press                  s decimal     7/2 010 02 PSIA
+< A D03 003 Flow Temp                  s decimal     7/2 002 02 `C
+< A D04 004 Volu Flow                  s decimal     7/2 007 02 LPM
+< A D05 005 Mass Flow                  s decimal     7/2 007 02 SLPM
+< A D06 037 Mass Flow Setpt            decimal       6/2 007 02 SLPM
+< A D07 703 Gas                        string        7/7
+< A D08 701 *Error                     string          3 ADC
+< A D09 702 *Status                    string          3 OPL
+< A D10 702 *Status                    string          3 POV
+< A D11 702 *Status                    string          3 TOV
+< A D12 702 *Status                    string          3 VOV
+< A D13 702 *Status                    string          3 MOV
+< A D14 702 *Status                    string          3 TMF
+< A D15 702 *Status                    string          3 OVR
+< A D16 702 *Status                    string          3 HLD
+< A D17 702 *Status                    string          3 EXH
+< A D18 702 *Status                    string          3 LCK

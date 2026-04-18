@@ -4,7 +4,7 @@
 
 Please email [gbellamy@umd.edu](mailto:gbellamy@umd.edu) or open a private
 security advisory on GitHub:
-<https://github.com/ulfsri/alicatlib/security/advisories/new>.
+<https://github.com/GraysonBellamy/alicatlib/security/advisories/new>.
 
 Do **not** file public issues for security reports.
 

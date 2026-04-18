@@ -1,13 +1,13 @@
 # Contributing to alicatlib
 
-Thanks for your interest. This project is a clean-room rewrite of `pyAlicat`;
-please read [docs/design.md](docs/design.md) before making non-trivial changes
-— most design decisions are already made and documented there.
+Thanks for your interest. Please read [docs/design.md](docs/design.md) before
+making non-trivial changes — most design decisions are already made and
+documented there.
 
 ## Dev setup
 
 ```bash
-git clone https://github.com/ulfsri/alicatlib
+git clone https://github.com/GraysonBellamy/alicatlib
 cd alicatlib
 uv sync --all-extras --dev
 uv run pre-commit install

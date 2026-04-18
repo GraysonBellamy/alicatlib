@@ -1,0 +1,8 @@
+# scenario: Tare absolute pressure (PC) on an MC-100SCCM-D equipped
+# with a barometer — post-op data frame matching dataframe_format_mc.txt.
+# Gated on Capability.BAROMETER at the session layer; without the
+# flag, session.execute raises AlicatMissingHardwareError pre-I/O.
+# Synthetic — hardware-correctable per design §16.4.
+
+> APC
+< A +14.70 +25.0 +25.5 +25.5 +50.0 N2

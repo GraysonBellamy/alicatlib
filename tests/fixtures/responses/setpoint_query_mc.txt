@@ -1,0 +1,12 @@
+# scenario: LS (query setpoint) on an MC-500SCCM-D
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud,
+# unit_id=A, firmware 10v20.0-R24).
+#
+# Real shape: `<uid> <current> <requested> <unit_code> <unit_label>` — 5 fields.
+# `current` and `requested` are *both* present on the wire; they happen to
+# match here because the loop has settled. Synthetic prior fixture treated
+# the reply as a full data frame, which is wrong (LS returns a small
+# setpoint-only reply, not the poll frame). See design §16.6.
+
+> ALS
+< A +078.94 +078.94 12 SCCM

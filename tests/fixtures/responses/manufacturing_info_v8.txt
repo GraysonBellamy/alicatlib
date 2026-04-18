@@ -1,0 +1,28 @@
+# scenario: ??M* on a real V8/V9 device (8v17.0-R23, MCR-200SLPM-D)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 115200 baud).
+#
+# Two important deviations from the modern 10v05 ??M* shape:
+#
+#   1. Codes are M00..M09, not M01..M10 (off-by-one). The current parser
+#      and the M-code-to-field map both expect the 1-indexed codes.
+#   2. Each line embeds a human-readable label between the code and the
+#      value: e.g. `M04 Model Number MCR-200SLPM-D` instead of just
+#      `M04 MCR-200SLPM-D`. The current parser would therefore read
+#      "Model Number MCR-200SLPM-D" as the value for code 4.
+#
+# Also note: this device runs 8v17 — strictly *less* than the documented
+# `MIN_FIRMWARE_MANUFACTURING_INFO = 8v28` threshold. ??M* works here
+# anyway. Design §16.1 #1 + design §15.3 mapping table both need a refresh
+# once the parser learns this dialect.
+
+> B??M*
+< B  M00 ALICAT SCIENTIFIC
+< B  M01 www.alicat.com
+< B  M02 Ph   520-290-6060
+< B  M03 Fax  520-290-0109
+< B  M04 Model Number MCR-200SLPM-D
+< B  M05 Serial Number 225873
+< B  M06 Date Manufactured 01/20/2020
+< B  M07 Date Calibrated   01/20/2020
+< B  M08 Calibrated By     BL
+< B  M09 Software Revision 8v17.0-R23

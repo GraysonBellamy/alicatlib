@@ -1,18 +1,23 @@
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = ["hatchling>=1.29.0", "hatch-vcs>=0.5.0"]
 build-backend = "hatchling.build"
+
+# ---------------------------------------------------------------------------
+# Project metadata
+# ---------------------------------------------------------------------------
 
 [project]
 name = "alicatlib"
-version = "0.1.0.dev0"
+dynamic = ["version"]
 description = "Python library for Alicat mass flow meters and controllers."
 readme = "README.md"
-license = { file = "LICENSE" }
-requires-python = ">=3.12"
+requires-python = ">=3.13"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Grayson Bellamy", email = "gbellamy@umd.edu" }]
 keywords = ["alicat", "mass-flow", "serial", "instrument", "mfc", "mfm"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Framework :: AnyIO",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
@@ -21,43 +26,43 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: Scientific/Engineering",
     "Topic :: System :: Hardware",
     "Typing :: Typed",
 ]
 dependencies = [
-    "anyio>=4.4",
-    "pyserial>=3.5",
+    "anyio>=4.13",
+    "anyserial>=0.1,<0.2",
 ]
 
 [project.optional-dependencies]
 postgres = ["asyncpg>=0.30"]
 parquet = ["pyarrow>=16"]
 docs = [
-    "mkdocs>=1.6",
-    "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.27",
-]
-dev = [
-    "pytest>=8.3",
-    "pytest-asyncio>=0.24",
-    "pytest-cov>=6.0",
-    "hypothesis>=6.112",
-    "ruff>=0.8",
-    "mypy>=1.13",
-    "pre-commit>=4.0",
-    "trio>=0.27",
+    "zensical>=0.0.33",
+    "mkdocstrings-python>=1.12",
 ]
 
 [project.urls]
-Homepage = "https://github.com/ulfsri/alicatlib"
-Repository = "https://github.com/ulfsri/alicatlib"
-Documentation = "https://ulfsri.github.io/alicatlib/"
-Issues = "https://github.com/ulfsri/alicatlib/issues"
-Changelog = "https://github.com/ulfsri/alicatlib/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/GraysonBellamy/alicatlib"
+Repository = "https://github.com/GraysonBellamy/alicatlib"
+Documentation = "https://GraysonBellamy.github.io/alicatlib/"
+Issues = "https://github.com/GraysonBellamy/alicatlib/issues"
+Changelog = "https://github.com/GraysonBellamy/alicatlib/blob/main/CHANGELOG.md"
+
+# ---------------------------------------------------------------------------
+# Hatch build
+# ---------------------------------------------------------------------------
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.1.0.dev0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/alicatlib/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/alicatlib"]
@@ -77,45 +82,87 @@ include = [
     "/pyproject.toml",
 ]
 
+# ---------------------------------------------------------------------------
+# uv — dependency groups (PEP 735)
+# ---------------------------------------------------------------------------
+
 [dependency-groups]
 dev = [
-    "pytest>=8.3",
-    "pytest-asyncio>=0.24",
-    "pytest-cov>=6.0",
-    "hypothesis>=6.112",
-    "ruff>=0.8",
-    "mypy>=1.13",
+    { include-group = "lint" },
+    { include-group = "type" },
+    { include-group = "test" },
+    { include-group = "docs" },
     "pre-commit>=4.0",
-    "trio>=0.27",
-    "mkdocs>=1.6",
-    "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.27",
 ]
+lint = [
+    "ruff>=0.15",
+]
+type = [
+    "mypy>=1.20",
+    "pyright>=1.1.390",
+]
+test = [
+    "pytest>=8.3",
+    # AnyIO ships its own pytest plugin; pytest-asyncio would conflict with it
+    # (the two auto-modes disagree, and pytest-asyncio wraps fixtures in fresh
+    # tasks that break cancel scopes / task groups). See AnyIO testing docs.
+    "pytest-cov>=6.0",
+    "coverage[toml]>=7.13.5",
+    "hypothesis>=6.112",
+    "trio>=0.27",       # used as a secondary AnyIO backend in cross-backend tests
+    "uvloop>=0.22.1; platform_system == 'Linux' or platform_system == 'Darwin'",
+    "pyyaml>=6.0",      # consumed by tests/unit/test_device_matrix.py to load
+                        # the empirical device-behavior fixture
+]
+docs = [
+    "zensical>=0.0.33",
+    "mkdocstrings-python>=1.12",
+]
+
+# ---------------------------------------------------------------------------
+# Ruff — lint + format
+# ---------------------------------------------------------------------------
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 src = ["src", "tests"]
+# Generated files: _version.py (hatch-vcs) and _codes_gen.py (scripts/gen_codes.py).
+# The generator is the canonical formatter for _codes_gen.py; CI idempotency
+# check (codegen job + pre-commit hook) guards against drift. Ruff never sees
+# these files, so there's no competing authority over their layout.
+extend-exclude = [
+    "src/alicatlib/_version.py",
+    "src/alicatlib/registry/_codes_gen.py",
+]
 
 [tool.ruff.lint]
 select = [
     "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
     "F",    # pyflakes
     "I",    # isort
     "UP",   # pyupgrade
     "B",    # bugbear
     "SIM",  # flake8-simplify
-    "ASYNC",# flake8-async (incl. ASYNC109 for asyncio.wait_for)
+    "ASYNC",# flake8-async (general async lints; wait_for ban is enforced via TID251 below)
     "PL",   # pylint
     "PT",   # pytest-style
     "RUF",  # ruff-specific
-    "D",    # pydocstyle
+    "D",    # pydocstyle (Google)
     "N",    # pep8-naming
     "S",    # flake8-bandit
     "C4",   # flake8-comprehensions
     "T20",  # flake8-print (no print in library)
     "TID",  # flake8-tidy-imports
-    "TCH",  # flake8-type-checking
+    "TC",   # flake8-type-checking (was TCH)
+    "PTH",  # flake8-use-pathlib
+    "ANN",  # flake8-annotations
+    "PERF", # perflint
+    "FURB", # refurb
+    "LOG",  # flake8-logging
+    "G",    # flake8-logging-format
+    "A",    # flake8-builtins
 ]
 ignore = [
     "D100",    # missing module docstring — tolerated for now on stubs
@@ -127,48 +174,139 @@ ignore = [
     "PLR0913", # too many args — common for device methods
     "RUF002",  # ambiguous unicode in docstrings — en/em dashes are fine
     "RUF003",  # ambiguous unicode in comments
+    "ANN401",  # Any in annotations — sometimes legitimate
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D", "S101", "PLR2004", "PLC0415"]
-"scripts/**" = ["D", "T20"]
+"tests/**" = ["D", "ANN", "S101", "PLR2004", "PLC0415", "S", "ASYNC109"]
+"scripts/**" = ["D", "T20", "ANN", "S110", "S112", "SIM105", "PLW2901", "ASYNC109", "ASYNC240", "PLR2004", "BLE001"]
+# Transport methods intentionally expose a ``timeout`` parameter at every I/O
+# boundary (design §5.1). ASYNC109 discourages that in favor of anyio.fail_after
+# *around* the call, but the design goal is to surface per-call bounds through
+# the Protocol so implementations can't elide them. D102 on the two concrete
+# impls is noise: the Transport Protocol in base.py carries the contract, so
+# shadowing methods don't repeat it. The protocol client (§5.2) takes the
+# same approach for its ``timeout`` / ``first_timeout`` parameters.
+"src/alicatlib/transport/**" = ["ASYNC109"]
+"src/alicatlib/transport/fake.py" = ["ASYNC109", "D102"]
+"src/alicatlib/transport/serial.py" = ["ASYNC109", "D102"]
+"src/alicatlib/protocol/client.py" = ["ASYNC109"]
+# Session.execute exposes a per-call ``timeout`` for the same reason the
+# Transport Protocol and AlicatProtocolClient do — the contract lives on the
+# public method signature (design §5.7), not inside anyio.fail_after calls.
+"src/alicatlib/devices/session.py" = ["ASYNC109"]
+# open_device exposes a per-call ``timeout`` that feeds the protocol
+# client's defaults — matches the Transport / client / session pattern
+# (design §5.9).
+"src/alicatlib/devices/factory.py" = ["ASYNC109"]
+# probe / find_devices expose a per-call ``timeout`` that feeds the
+# protocol client's defaults — matches the Transport / client / session /
+# factory pattern (design §5.12).
+"src/alicatlib/devices/discovery.py" = ["ASYNC109"]
+# AlicatManager.add exposes a per-call ``timeout`` that feeds the
+# protocol client's defaults — matches the Transport / client / session /
+# factory / discovery pattern (design §5.13).
+"src/alicatlib/manager.py" = ["ASYNC109"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# Design §5.2: asyncio.wait_for has cancel-leak corner cases and is superseded
+# by asyncio.timeout() / anyio.fail_after. Ruff has no dedicated rule for this,
+# so we enforce via TID251.
+"asyncio.wait_for".msg = "Use anyio.fail_after / anyio.move_on_after instead (see design §5.2)."
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = 88
+
+# ---------------------------------------------------------------------------
+# mypy — strict
+# ---------------------------------------------------------------------------
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 strict = true
 warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
 disallow_any_unimported = true
 show_error_codes = true
 show_column_numbers = true
 pretty = true
+enable_error_code = [
+    "redundant-expr",
+    "truthy-bool",
+    "ignore-without-code",
+    "unused-awaitable",
+    "possibly-undefined",
+]
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
 files = ["src", "tests"]
+exclude = ["src/alicatlib/_version\\.py"]
 
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+# pyarrow is an optional extra and ships no py.typed marker as of 16.x. Rather
+# than vendoring stubs we mark it as Any-typed and accept the weaker guarantees
+# at the Parquet-sink boundary. The sink's public surface is fully typed; only
+# the interior pyarrow calls become Any.
+[[tool.mypy.overrides]]
+module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# asyncpg is an optional extra. It ships stubs in recent versions, but still
+# tripwires `disallow_any_unimported` when not installed in the dev env.
+[[tool.mypy.overrides]]
+module = ["asyncpg", "asyncpg.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# ---------------------------------------------------------------------------
+# Pyright — secondary type checker
+# ---------------------------------------------------------------------------
+
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["src/alicatlib/_version.py", "**/__pycache__"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = "warning"
+reportUnknownMemberType = "warning"
+reportUnknownVariableType = "warning"
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
 
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-asyncio_mode = "auto"
+# No asyncio_mode: we use AnyIO's pytest plugin instead of pytest-asyncio.
+# Async tests mark with @pytest.mark.anyio; cross-backend coverage comes from
+# the parametrised anyio_backend fixture in tests/conftest.py.
+xfail_strict = true
 markers = [
     "hardware: requires a connected Alicat device (read-only)",
-    "hardware_stateful: changes device state (gas, setpoint, tare) — opt in via PYALICAT_ENABLE_STATEFUL_TESTS=1",
-    "hardware_destructive: destructive ops (factory reset, baud change, exhaust) — opt in via PYALICAT_ENABLE_DESTRUCTIVE_TESTS=1",
+    "hardware_stateful: changes device state (gas, setpoint, tare) — opt in via ALICATLIB_ENABLE_STATEFUL_TESTS=1",
+    "hardware_destructive: destructive ops (factory reset, baud change, exhaust) — opt in via ALICATLIB_ENABLE_DESTRUCTIVE_TESTS=1",
     "slow: excluded from the fast CI run",
 ]
 addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
+    "--import-mode=importlib",
     "-m",
     "not hardware and not hardware_stateful and not hardware_destructive",
 ]
@@ -176,21 +314,31 @@ filterwarnings = [
     "error",
 ]
 
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+
 [tool.coverage.run]
+source_pkgs = ["alicatlib"]
 branch = true
-source = ["alicatlib"]
 parallel = true
+omit = [
+    "src/alicatlib/_version.py",
+]
+
+[tool.coverage.paths]
+alicatlib = ["src/alicatlib", "*/site-packages/alicatlib"]
 
 [tool.coverage.report]
 precision = 2
 show_missing = true
 skip_covered = false
-exclude_lines = [
+exclude_also = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
     "raise NotImplementedError",
+    "@overload",
+    "@abstractmethod",
     "\\.\\.\\.",
 ]
-
-[tool.coverage.paths]
-source = ["src/alicatlib", "*/site-packages/alicatlib"]

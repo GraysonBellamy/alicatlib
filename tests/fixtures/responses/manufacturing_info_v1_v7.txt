@@ -1,0 +1,30 @@
+# scenario: ??M* on a V1_V7 controller (MC-500SCCM-D, 5v12.0-R22)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud).
+#
+# Critical finding: ??M* WORKS on 5v12 even though the Alicat Serial
+# Primer's Quick Command Reference annotates it as `8v28+`. The dialect
+# is byte-identical to the V8/V9 + V10 captures (M00..M09 codes, embedded
+# `Model Number ` / `Serial Number ` / etc. labels).
+#
+# The 5v12.0-R22 has an `R22` revision suffix — same revision-suffix
+# pattern as the 8v17.0-R23 that also surfaced ??M* support against
+# the primer's documented minimum. Two possibilities:
+#
+#   (a) Every revisioned older device gets the ??M* back-port.
+#   (b) ??M* was always available on every numeric-family device, and
+#       the primer's `8v28+` annotation was wrong from the start.
+#
+# Either way: the factory's try-and-recover flow is the right behaviour.
+# Don't trust the primer's pre-V10 firmware-introduction annotations.
+
+> A??M*
+< A  M00 ALICAT SCIENTIFIC
+< A  M01 www.alicat.com
+< A  M02 Ph   520-290-6060
+< A  M03 Fax  520-290-0109
+< A  M04 Model Number  MC-500SCCM-D
+< A  M05 Serial Number 122161
+< A  M06 Date Manufactured 09/24/2015
+< A  M07 Date Calibrated   09/24/2015
+< A  M08 Calibrated By     PD
+< A  M09 Software Revision 5v12.0-R22

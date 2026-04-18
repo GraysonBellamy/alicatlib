@@ -4,7 +4,7 @@
 pip install alicatlib
 ```
 
-Requires **Python 3.12 or newer**.
+Requires **Python 3.13 or newer** (inherited from [`anyserial`](https://pypi.org/project/anyserial/)).
 
 ## Optional extras
 
@@ -19,5 +19,9 @@ CSV and JSONL sinks need no extras — they use only the standard library.
 
 ## Platform support
 
-Linux, macOS, and Windows are tested in CI. Serial-port enumeration uses
-`pyserial.tools.list_ports` on all three platforms.
+Linux, macOS, BSD, and Windows are supported via
+[`anyserial`](https://pypi.org/project/anyserial/) (readiness-driven I/O on
+POSIX, IOCP on Windows). Serial-port enumeration uses
+`anyserial.list_serial_ports()` natively; a `pyserial`-backed fallback is
+available under the `anyserial[discovery-pyserial]` extra for platforms where
+native enumeration misses devices.

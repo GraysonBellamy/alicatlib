@@ -1,0 +1,31 @@
+# scenario: ??G* gas list on an MC-500SCCM-D (V10, 10v20.0-R24)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud).
+#
+# This *replaces* the prior synthetic fixture which used a count-header
+# + 4-field shape that has no basis in real wire data.
+#
+# Real format:
+#   - Each row: `<uid> G<NN>      <short_name>` where NN is the row index
+#     (zero-padded to 2 digits) and the gas short name is right-aligned
+#     in a fixed-width column (~7 chars).
+#   - No count header.
+#   - No long name in the row (long names come from the static gas registry
+#     keyed on short_name).
+#   - Rows go G00..G29 for the canonical Alicat gas list, then jump to
+#     G140..G210+ for COMPOSER mixtures and specialty gases. The integer
+#     in the row label is the per-device code (NOT the canonical
+#     Statistic.Gas code — they happen to coincide for canonical gases).
+#
+# Truncated to the first 8 entries for fixture brevity; the full list runs
+# to ~110 entries on this device.
+
+> A??G*
+< A G00      Air
+< A G01       Ar
+< A G02      CH4
+< A G03       CO
+< A G04      CO2
+< A G05     C2H6
+< A G06       H2
+< A G07       He
+< A G08       N2

@@ -1,0 +1,14 @@
+# scenario: DCU query on MASS_FLOW (stat 5) on an MC-500SCCM-D
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud,
+# unit_id=A, firmware 10v20.0-R24).
+#
+# Real shape: `<uid> <unit_code> <unit_label>` — 3 fields, no statistic echo.
+# Synthetic prior fixture's 4-field shape was wrong. See design §16.6.
+
+# Query.
+> ADCU 5
+< A 12 SCCM
+
+# Set form (set+verify echoes the same 3-field reply with the new unit).
+> ADCU 5 7
+< A 7 SLPM

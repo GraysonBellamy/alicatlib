@@ -1,0 +1,11 @@
+# scenario: LSS query + set on an MC-100SCCM-D.
+# Response shape: <uid> <mode> — 2 fields.
+# Synthetic — hardware-correctable per design §16.4.
+
+# Query — current source is serial.
+> ALSS
+< A S
+
+# Set to analog — echo confirms.
+> ALSS A
+< A A

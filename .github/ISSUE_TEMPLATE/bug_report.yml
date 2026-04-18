@@ -37,5 +37,5 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: DEBUG-level logs from `pyalicat.protocol` / `pyalicat.session` if available.
+      description: DEBUG-level logs from `alicatlib.protocol` / `alicatlib.session` if available.
       render: text

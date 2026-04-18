@@ -1,0 +1,20 @@
+# scenario: poll on a V1_V7 controller (MC-500SCCM-D, 5v12.0-R22)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud).
+#
+# Field order matches dataframe_format_v1_v7.txt:
+#   Unit_ID  Pressure   Temperature   Volumetric   Mass     SetPoint   Gas
+#   A        +014.52    +021.50       +0000.1      +0000.2  0116.3     N2
+#
+# Notable shape differences from V8+ poll output:
+#
+#   - SetPoint width is `0116.3` (5 chars, no `+` sign on positive values
+#     — sign-only-on-negative). V8+ emits `+078.95` (signed-always with
+#     leading `+`). The parser's `parse_optional_float` accepts both via
+#     Python's float(); just noting the device-side convention.
+#
+#   - Volumetric / Mass widths are `+0000.1` (4 int + 1 dec) — different
+#     precision than V10 (`+000.00`, 3 int + 2 dec) and 10v04 meter
+#     (`-00.034`, 2 int + 3 dec). Per-device precision continues to vary.
+
+> A
+< A +014.52 +021.50 +0000.1 +0000.2 0116.3      N2

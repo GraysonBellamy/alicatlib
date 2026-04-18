@@ -1,0 +1,23 @@
+# scenario: LS query on MC-5SLPM-D capturing the current-vs-requested split
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud,
+# unit_id=A, firmware 10v20.0-R24). Device LSS=A (analog setpoint source),
+# so serial LS writes are silently ignored — but the LS query still
+# reveals the current/requested split.
+#
+# Wire shape: `<uid> <current> <requested> <unit_code> <unit_label>` (5 fields).
+#
+# Resolves design §15.6's deferral: the wire already separates
+# SetpointState.current (measured value of the controlled variable) from
+# SetpointState.requested (setpoint target). The facade populates
+# both distinctly; no LV cache dependency.
+
+# Steady state — current == requested.
+> ALS
+< A +078.95 +078.95 12 SCCM
+
+# Transient — current diverges from requested while the loop re-settles.
+# Captured back-to-back with the steady-state query above; the device
+# evidently updates the internal target at one cadence and the reported
+# current at a slightly different one, exposing the split.
+> ALS
+< A +078.95 +078.88 12 SCCM

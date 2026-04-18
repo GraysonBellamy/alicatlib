@@ -1,0 +1,9 @@
+# scenario: Legacy G 8 (set gas to N2) on a pre-10v05 device — the
+# device replies with a post-op data frame, not the modern
+# <uid> code short long form. Shape matches the ??D* format in
+# dataframe_format_mc.txt:
+#   Unit_ID Abs_Press Flow_Temp Vol_Flow Mass_Flow Setpoint Gas_Label
+# Synthetic — to be replaced by a real-device capture.
+
+> AG 8
+< A +14.70 +25.0 +25.5 +25.5 +50.0 N2

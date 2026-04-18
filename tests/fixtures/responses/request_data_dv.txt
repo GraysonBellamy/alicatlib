@@ -1,0 +1,43 @@
+# scenario: DV (REQUEST_DATA) captures on an MC-5SLPM-D
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud,
+# unit_id=A, firmware 10v20.0-R24).
+#
+# Wire shape (resolves design §15.2 / §16.3 ambiguity):
+#
+#   request:  <uid>DV <time_ms> <stat1> [stat2...]\r
+#   reply:    <val1> [val2...]\r    <-- NO unit-id prefix (unique in catalog)
+#
+# - <time_ms>: averaging window in ms. 2..500ms tested; values returned
+#   were stable across window sizes (the primer's vague "time" = averaging).
+# - Values are whitespace-separated, always sign-prefixed (+/-), in the
+#   same order as the requested statistic list. Up to 13 per primer.
+# - Invalid statistic codes return the sentinel ``--`` rather than ``?``.
+# - Zero time rejects. Missing statistic list rejects.
+
+# Single statistic (abs_press, stat code 2).
+> ADV 10 2
+< +014.63
+
+# Two statistics (abs_press + mass_flow).
+> ADV 500 2 5
+< +014.63 +000.06
+
+# Five statistics (abs_press + temp + vol_flow + mass_flow + mass_flow_setpt).
+> ADV 2 2 3 4 5 37
+< +014.63 +023.61 +000.02 +000.02 +078.94
+
+# Invalid statistic code returns ``--`` sentinel (NOT ``?`` rejection).
+> ADV 2 99
+< --
+
+# No args — rejected.
+> ADV
+< ?
+
+# Time-only (no statistics) — rejected.
+> ADV 1
+< ?
+
+# Zero time — rejected.
+> ADV 0 2 5 37
+< ?

@@ -1,0 +1,6 @@
+# scenario: S 75.0 (legacy setpoint set, pre-9v00 firmware).
+# Same data-frame response shape as modern LS.
+# Synthetic — hardware-correctable per design §16.4.
+
+> AS 75.0
+< A +14.70 +25.0 +45.0 +45.0 +75.0 N2

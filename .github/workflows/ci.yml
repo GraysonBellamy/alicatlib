@@ -10,81 +10,97 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   FORCE_COLOR: "1"
-  UV_SYSTEM_PYTHON: "0"
+  UV_FROZEN: "1"
+  PYTHONUNBUFFERED: "1"
 
 jobs:
   lint:
-    name: Lint & Format
+    name: Lint + format check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v6.0.2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
-      - name: Install deps
-        run: uv sync --all-extras --dev
+          cache-dependency-glob: "uv.lock"
+      - name: Install dependencies
+        run: uv sync --group lint
+      - name: Ruff check
+        run: uv run ruff check --output-format=github
       - name: Ruff format check
-        run: uv run ruff format --check .
-      - name: Ruff lint
-        run: uv run ruff check --output-format=github .
+        run: uv run ruff format --check
 
-  types:
-    name: mypy --strict
+  typecheck:
+    name: Type check (mypy + pyright)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v6.0.2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
-      - name: Install deps
-        run: uv sync --all-extras --dev
-      - name: Run mypy
+          cache-dependency-glob: "uv.lock"
+      - name: Install dependencies
+        run: uv sync --group type --group test
+      - name: mypy
         run: uv run mypy
+      - name: pyright
+        run: uv run pyright
 
   test:
     name: Tests (py${{ matrix.python-version }} on ${{ matrix.os }})
+    needs: [lint, typecheck]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v6.0.2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
       - name: Pin Python ${{ matrix.python-version }}
         run: uv python pin ${{ matrix.python-version }}
-      - name: Install deps
-        run: uv sync --all-extras --dev
+      - name: Install dependencies
+        run: uv sync --all-extras --group test
       - name: Run tests
         run: uv run pytest --cov --cov-report=xml --cov-report=term
-      - name: Upload coverage (Linux, 3.13)
+      - name: Upload coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6.0.0
         with:
           files: ./coverage.xml
+          flags: unit
           fail_ci_if_error: false
 
   build:
     name: Build distribution
     runs-on: ubuntu-latest
-    needs: [lint, types, test]
+    needs: [lint, typecheck, test]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0  # hatch-vcs needs full history
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
       - name: Build sdist + wheel
         run: uv build
-      - name: Check wheel & sdist
-        run: |
-          uv tool run twine check dist/*
+      - name: Check artifacts
+        run: uv run --with twine twine check --strict dist/*
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: dist
           path: dist/
@@ -94,12 +110,18 @@ jobs:
     name: codes.json regen idempotency
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v6.0.2
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
-      - name: Install deps
-        run: uv sync --all-extras --dev
+          cache-dependency-glob: "uv.lock"
+      - name: Install dependencies
+        run: uv sync --group dev
+      # --check prints a unified diff on drift (more informative than a bare
+      # `git diff` failure). The git diff below is a belt-and-braces guard in
+      # case someone bypassed both the pre-commit hook and --check.
+      - name: gen_codes.py --check
+        run: uv run python scripts/gen_codes.py --check
       - name: Regenerate and diff
         run: |
           uv run python scripts/gen_codes.py

@@ -1,0 +1,7 @@
+# scenario: Tare gauge pressure (TP) on an MC-100SCCM-D — post-op data
+# frame. Shape matches dataframe_format_mc.txt; Abs_Press should now
+# read the current barometer (no gauge offset). Synthetic — hardware-
+# correctable per design §16.4.
+
+> ATP
+< A +14.70 +25.0 +25.5 +25.5 +50.0 N2

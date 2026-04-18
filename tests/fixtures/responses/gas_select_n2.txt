@@ -1,0 +1,5 @@
+# scenario: Set active gas to N2 (code 8) via GS command
+# Response is "<unit_id> <code> <short> <long_name>".
+
+> AGS 8
+< A 8 N2 Nitrogen

@@ -1,0 +1,60 @@
+# scenario: ??D* on a real V1_V7 controller (MC-500SCCM-D, 5v12.0-R22)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud, unit_id=A).
+#
+# This dialect is FUNDAMENTALLY DIFFERENT from the V8/V9 + V10 canonical
+# format — see design §16.6.2 for the full analysis. Major differences:
+#
+#   1. Column header: `<uid>  D00 NAME_______ TYPE_____ MinVal_  MaxVal_  UNITS__`
+#      — 5 columns: NAME, TYPE, MinVal, MaxVal, UNITS. The V8+ shape's
+#      `ID_ NAME TYPE WIDTH NOTES` columns differ entirely.
+#
+#   2. *No statistic-code column.* The V1_V7 line is
+#      `<uid>  D<NN> <name> <type> <min> <max> <units>` — the canonical
+#      Alicat statistic-code (700, 002, 005, ...) does *not* appear in
+#      ??D* on V1_V7. Field-to-Statistic mapping has to come from name
+#      lookup alone, not the wire.
+#
+#   3. Field names use shorter forms (`Pressure` not `Abs Press`,
+#      `Volumetric` not `Volu Flow`, `Mass` not `Mass Flow`,
+#      `SetPoint` not `Mass Flow Setpt`, `Temperature` not `Flow Temp`).
+#
+#   4. Type tokens differ: `signed` (not `s decimal`), `char` (not
+#      `string` for single-char), `string` (matches).
+#
+#   5. UNITS column carries the engineering unit directly (`PSIA`, `C`,
+#      `CCM`, `SCCM`, `na`) — no separate unit-code field. The V8+
+#      `010 02 PSIA` triple becomes a single `PSIA` token here.
+#
+#   6. Conditional rows (`Error`, `Status`) are NOT marked with `*` on
+#      V1_V7 — the parser must rely on field-name pattern matching to
+#      decide what's optional. (Or, more realistically, the parser must
+#      simply trust the device's ordering and tail-match unconsumed
+#      tokens as conditional fields.)
+#
+#   7. Status flags are still one row per flag (LCK, OVR, POV, TOV,
+#      VOV, MOV — fewer than the 13+ on V8+), with the per-flag
+#      mnemonic in the MaxVal column. Same conditional-row pattern.
+#
+#   8. Two leading spaces between unit_id and `D<NN>` (`A  D00 ...`)
+#      vs single space on V8+ (`A D00 ...`).
+#
+# Implication: the V8+ parser will silently misparse this format. Either
+# add a V1_V7 dialect with its own parser, or extend the existing parser
+# to detect both dialects from the column-header signature.
+
+> A??D*
+< A  D00 NAME_______ TYPE_____ MinVal_  MaxVal_  UNITS__
+< A  D01 Unit ID     char         A         Z         na
+< A  D02 Pressure    signed    +000.00  +160.00     PSIA
+< A  D03 Temperature signed    -010.00  +050.00        C
+< A  D04 Volumetric  signed    +0000.0  +0500.0      CCM
+< A  D05 Mass        signed    +0000.0  +0500.0     SCCM
+< A  D06 SetPoint    signed    +0000.0  +0500.0     SCCM
+< A  D07 Gas         string        Air       D2       na
+< A  D08 Error       string         na      ADC       na
+< A  D09 Status      string         na      LCK       na
+< A  D10 Status      string         na      OVR       na
+< A  D11 Status      string         na      POV       na
+< A  D12 Status      string         na      TOV       na
+< A  D13 Status      string         na      VOV       na
+< A  D14 Status      string         na      MOV       na

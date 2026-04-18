@@ -1,0 +1,13 @@
+# scenario: poll (A\r) on an MC-500SCCM-D (V10, 10v20.0-R24)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud).
+#
+# Field order matches dataframe_format_mc.txt:
+#   Unit_ID  Abs Press   Flow Temp   Volu Flow   Mass Flow   Mass Flow Setpt   Gas
+#   A        +014.62     +021.89     +000.00     +000.00     +078.95           N2
+#
+# Note the fixed-width gas column (right-padded with spaces; declared
+# WIDTH=6 in ??D*). The current parser collapses the run via text.split(),
+# but a column-aware parser would have to honour the declared widths.
+
+> A
+< A +014.62 +021.89 +000.00 +000.00 +078.95     N2

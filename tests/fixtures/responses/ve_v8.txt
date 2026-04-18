@@ -1,0 +1,8 @@
+# scenario: VE query on a V8/V9-family device
+# Captured 2026-04-17 from a real 8v17.0-R23 unit at /dev/ttyUSB0
+# (Prolific PL2303, 115200 baud, unit_id=B). Note the date format —
+# `<Mon> <DD> <YYYY>,<HH:MM:SS>` rather than ISO `YYYY-MM-DD`. The
+# parser accepts both formats; design §16.1 #4.
+
+> BVE
+< B   8v17.0-R23 Nov 27 2019,15:28:45

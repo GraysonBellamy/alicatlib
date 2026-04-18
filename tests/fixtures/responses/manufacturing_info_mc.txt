@@ -1,0 +1,26 @@
+# scenario: ??M* on an MC-500SCCM-D flow controller (V10, 10v20.0-R24)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud).
+#
+# This *replaces* the prior synthetic fixture which was a guess. The
+# shape matches the V8/V9 8v17 capture (manufacturing_info_v8.txt)
+# byte-for-byte aside from per-device values — so the format is
+# canonical Alicat, not V10-specific.
+#
+# Notable shape facts (also captured in design §16.6):
+#   - Codes are M00..M09 (zero-indexed).
+#   - Each line embeds a human-readable label between the code and value:
+#     `M04 Model Number MC-500SCCM-D` not `M04 MC-500SCCM-D`.
+#   - 10 lines total; the parser must strip the labels via a known prefix
+#     table, not split on whitespace.
+
+> A??M*
+< A  M00 ALICAT SCIENTIFIC
+< A  M01 www.alicat.com
+< A  M02 Ph   520-290-6060
+< A  M03 info@alicat.com
+< A  M04 Model Number MC-500SCCM-D
+< A  M05 Serial Number 521641
+< A  M06 Date Manufactured 03/02/2025
+< A  M07 Date Calibrated   03/02/2025
+< A  M08 Calibrated By     BL
+< A  M09 Software Revision 10v20.0-R24

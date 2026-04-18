@@ -1,0 +1,11 @@
+# scenario: LS <value> (set setpoint) on an MC-500SCCM-D
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud,
+# unit_id=A, firmware 10v20.0-R24). Synthesised from the LS-query capture —
+# an actual write was not made during capture (read-only smoke).
+#
+# Real shape: same as LS query — `<uid> <current> <requested> <unit_code> <unit_label>`.
+# After a fresh write the requested value reflects the new target while
+# `current` lags behind until the loop settles.
+
+> ALS 100.0
+< A +000.00 +100.00 12 SCCM

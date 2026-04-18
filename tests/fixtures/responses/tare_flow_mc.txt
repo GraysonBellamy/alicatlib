@@ -1,0 +1,8 @@
+# scenario: Tare flow (T) on an MC-100SCCM-D — response is a post-tare
+# data frame matching the shape in dataframe_format_mc.txt:
+#   Unit_ID Abs_Press Flow_Temp Vol_Flow Mass_Flow Setpoint Gas_Label
+# Mass_Flow should zero after a successful tare; synthetic fixture —
+# hardware-correctable per design §16.4.
+
+> AT
+< A +14.70 +25.0 +0.0 +0.0 +50.0 N2

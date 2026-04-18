@@ -1,0 +1,10 @@
+# scenario: FPF query on MASS_FLOW (stat 5) on an MC-500SCCM-D
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud,
+# unit_id=A, firmware 10v20.0-R24).
+#
+# Real shape: `<uid> <signed_value> <unit_code> <unit_label>` — 4 fields.
+# Synthetic prior fixture's 5-field shape was wrong. See design §16.6.
+# Note the leading `+` sign on the value.
+
+> AFPF 5
+< A +500.00 12 SCCM

@@ -1,0 +1,57 @@
+# scenario: Full identification + format + first poll for MC-500SCCM-D
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud,
+# unit_id=A, firmware 10v20.0-R24).
+#
+# This is the end-to-end "happy path" for open_device on a V10 flow
+# controller — covers every command the factory issues during
+# identification, plus a follow-up poll.
+#
+# Replaces a prior synthetic fixture that used a guessed shape.
+# See design §16.6 for why the canonical Alicat ??M* and ??D* dialects
+# are the M00..M09-with-labels and D00-column-header forms.
+
+# Step 1 — VE (firmware version).
+> AVE
+< A   10v20.0-R24 Jan  9 2025,15:04:07
+
+# Step 2 — ??M* (manufacturing info).
+> A??M*
+< A  M00 ALICAT SCIENTIFIC
+< A  M01 www.alicat.com
+< A  M02 Ph   520-290-6060
+< A  M03 info@alicat.com
+< A  M04 Model Number MC-500SCCM-D
+< A  M05 Serial Number 521641
+< A  M06 Date Manufactured 03/02/2025
+< A  M07 Date Calibrated   03/02/2025
+< A  M08 Calibrated By     BL
+< A  M09 Software Revision 10v20.0-R24
+
+# Step 3 — ??D* (data-frame format).
+> A??D*
+< A D00 ID_ NAME______________________ TYPE_______ WIDTH NOTES___________________
+< A D01 700 Unit ID                    string          1
+< A D02 002 Abs Press                  s decimal     7/2 010 02 PSIA
+< A D03 003 Flow Temp                  s decimal     7/2 002 02 `C
+< A D04 004 Volu Flow                  s decimal     7/2 012 02 CCM
+< A D05 005 Mass Flow                  s decimal     7/2 012 02 SCCM
+< A D06 037 Mass Flow Setpt            s decimal     7/2 012 02 SCCM
+< A D07 703 Gas                        string          6
+< A D08 701 *Error                     string          3 ADC
+< A D09 702 *Status                    string          3 OPL
+< A D10 702 *Status                    string          3 POV
+< A D11 702 *Status                    string          3 P2O
+< A D12 702 *Status                    string          3 TOV
+< A D13 702 *Status                    string          3 VOV
+< A D14 702 *Status                    string          3 MOV
+< A D15 702 *Status                    string          3 TMF
+< A D16 702 *Status                    string          3 OVR
+< A D17 702 *Status                    string          3 COM
+< A D18 702 *Status                    string          3 HLD
+< A D19 702 *Status                    string          3 EXH
+< A D20 702 *Status                    string          3 GTA
+< A D21 702 *Status                    string          3 LCK
+
+# Step 4 — first poll.
+> A
+< A +014.62 +021.89 +000.00 +000.00 +078.95     N2

@@ -1,0 +1,16 @@
+# scenario: poll on a V10 mass-flow *meter* (MW-10SLPM-D, 10v04.0-R24)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud).
+#
+# Field order matches dataframe_format_meter_v10.txt:
+#   Unit_ID  Abs Press   Flow Temp   Volu Flow   Mass Flow   Gas
+#   A        +14.633     +022.97     -00.034     -00.034     Air
+#
+# Notes:
+#   - 5 required fields (no Mass_Flow_Setpt — this is a meter).
+#   - Negative Volu/Mass Flow values reflect zero-flow noise (device is
+#     idle on the bench); the parser must accept signed decimals here.
+#   - Width/precision is `7/3` (3 decimal places) — see notes in
+#     dataframe_format_meter_v10.txt.
+
+> A
+< A +14.633 +022.97 -00.034 -00.034    Air

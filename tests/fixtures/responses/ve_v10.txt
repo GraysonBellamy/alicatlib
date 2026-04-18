@@ -1,0 +1,9 @@
+# scenario: VE query on a V10-family flow controller
+# Captured 2026-04-17 from a real MC-500SCCM-D unit at /dev/ttyUSB0
+# (Prolific PL2303, 19200 baud, unit_id=A). Note the date format —
+# `<Mon> <DD> <YYYY>,<HH:MM:SS>` matches what the V8/V9 8v17 emits;
+# this dispels the design's earlier assumption that V10 uses ISO and
+# only V8/V9 uses month-name. Both families use the same VE shape.
+
+> AVE
+< A   10v20.0-R24 Jan  9 2025,15:04:07

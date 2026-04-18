@@ -1,0 +1,40 @@
+# scenario: ??D* on a real V10 mass-flow *meter* (MW-10SLPM-D, 10v04.0-R24)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud, unit_id=A).
+#
+# Companion to dataframe_format_mc.txt (which is from a *controller* on
+# 10v20). The shape is identical — same canonical Alicat dialect — but
+# the *content* differs in two ways that the parser must handle:
+#
+#   1. No `Mass Flow Setpt` row: a meter has no setpoint to report. The
+#      D-codes go D01..D06 then jump to status flags — no controller-only
+#      fields. The parser should NOT assume Mass_Flow_Setpt exists.
+#
+#   2. The width/precision column shows `7/3` on this device for fields
+#      that are `7/2` on the 10v20 controller. So precision is per-device,
+#      not family-wide. The poll output reflects this (`+14.633` vs
+#      `+14.62`).
+#
+# This capture also confirms ??D* dialect canonical-ness: V8/V9 (8v17),
+# pre-10v05 V10 (10v04), and post-10v05 V10 (10v20) all use the same shape.
+
+> A??D*
+< A D00 ID_ NAME______________________ TYPE_______ WIDTH NOTES___________________
+< A D01 700 Unit ID                    string          1
+< A D02 002 Abs Press                  s decimal     7/3 010 02 PSIA
+< A D03 003 Flow Temp                  s decimal     7/2 002 02 `C
+< A D04 004 Volu Flow                  s decimal     7/3 007 02 LPM
+< A D05 005 Mass Flow                  s decimal     7/3 007 02 SLPM
+< A D06 703 Gas                        string          6
+< A D07 701 *Error                     string          3 ADC
+< A D08 702 *Status                    string          3 OPL
+< A D09 702 *Status                    string          3 POV
+< A D10 702 *Status                    string          3 P2O
+< A D11 702 *Status                    string          3 TOV
+< A D12 702 *Status                    string          3 VOV
+< A D13 702 *Status                    string          3 MOV
+< A D14 702 *Status                    string          3 TMF
+< A D15 702 *Status                    string          3 OVR
+< A D16 702 *Status                    string          3 COM
+< A D17 702 *Status                    string          3 HLD
+< A D18 702 *Status                    string          3 EXH
+< A D19 702 *Status                    string          3 LCK

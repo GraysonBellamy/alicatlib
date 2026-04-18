@@ -1,0 +1,21 @@
+# scenario: poll (`B\r`) on a real V8/V9 device (8v17.0-R23, MCR-200SLPM-D)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 115200 baud).
+#
+# Frame shape per the device's ??D* (see dataframe_format_v8.txt), in declared
+# field order:
+#
+#   D01 Unit ID         (string, 1 char)
+#   D02 Abs Press       (s decimal 7/2, PSIA)   → +014.62
+#   D03 Flow Temp       (s decimal 7/2, °C)     → +022.95
+#   D04 Volu Flow       (s decimal 7/2, LPM)    → +000.00
+#   D05 Mass Flow       (s decimal 7/2, SLPM)   → +000.00
+#   D06 Mass Flow Setpt (s decimal 7/2, SLPM)   → +000.00
+#   D07 Gas             (string, 6 chars)       → N2
+#   D08+ *Error / *Status fields are conditional and absent in this capture.
+#
+# Note the multi-space gap before `N2` — the gas-name column is right-padded
+# to its declared width. The current `text.split()` poll parser collapses
+# the runs correctly; a column-aware parser would have to honour widths.
+
+> B
+< B +014.62 +022.95 +000.00 +000.00 +000.00     N2

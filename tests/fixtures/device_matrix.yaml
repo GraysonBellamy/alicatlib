@@ -1,0 +1,524 @@
+# Empirical device-behavior matrix — source of truth for per-firmware command
+# availability. Cross-checked against command specs' ``firmware_families``
+# declarations in ``tests/unit/test_device_matrix.py``.
+#
+# design.md §16.6 remains the narrative complement; this file is the data.
+#
+# Each entry is one (device_model, firmware, capture-date) triple. Entries
+# append as new hardware appears — never silently edit an existing entry
+# unless the original capture was mis-transcribed.
+#
+# Status taxonomy (uniform across every command block):
+#   supported    device responds usefully; reply parses per the command spec
+#   rejected     device returns `?` (AlicatCommandRejectedError) OR the command
+#                is blocked pre-I/O by a library gate (firmware family /
+#                min_firmware / DeviceKind / Capability) — in either case no
+#                typed reply parses. §16.6.10 uses this status for gates that
+#                emit zero tx frames on the wire; the provenance note spells
+#                out which gate type fires.
+#   silent       device returns nothing within a reasonable timeout
+#   fallback     device returns a data frame instead of the proper reply
+#                (common on pre-10v05 firmware when display LCK is active)
+#   placeholder  degraded reply pattern such as ``A   1 ---``, ``A +0 1 ---``
+#                or ``A   Feature Not Enabled`` (FPF on an absent statistic;
+#                LS/LSS on a meter; ZCA/ZCP on 6v21)
+#   adc_counts   pre-10v05 DCU returns raw ADC counts — different command
+#                meaning entirely
+#   untested     no capture yet; leave as default
+#
+# Prefix policy describes the SEPARATE treatment of reads (``??M*`` / ``??D*``
+# / ``??G*`` / poll) vs writes on GP devices. On non-GP families the prefix
+# is universally empty, so both read/write fields are ``none``.
+#
+# Dialect hints are short tags that code-side parsers can key off of.
+
+schema_version: 1
+
+devices:
+
+  - model: MC-100SCCM-D
+    firmware: GP07R100
+    family: GP
+    captured_at: "2026-04-17"
+    provenance:
+      serial: "68874"
+      manufactured: "01/23/2012"
+      port: /dev/ttyUSB0
+      baud: 19200
+      unit_id: A
+      note: "First real GP capture. Exposed VE-absent + \\x08-wrapped ??M*/??D* + single-line ??G* + writes-only $$ rule. See §16.6.8. Follow-up run on 2026-04-17 (§16.6.10) re-validated the GP path on the hardened code base: open via ??M* fallback works (1698 ms — includes backspace-padded parse), 500-poll at p50=30 ms, 30-gas ??G* list decodes, Gas.AIR set via legacy G 0 with the $$ write-prefix round-trips cleanly, restore to N2 verified. All five modern commands (NCS, LS, UD, TC, ZCP) gate pre-I/O with AlicatFirmwareError or AlicatUnsupportedCommandError and zero tx — GP family is correctly blocked from the modern surface."
+    prefix:
+      reads: none
+      writes: dollar
+    dialects:
+      mm: gp_short_code_backspace_padded
+      dd: legacy_backspace_padded
+      gg: single_line_no_cr
+    commands:
+      poll:          supported
+      ve:            silent
+      mm:            supported
+      dd:            supported
+      gg:            supported
+      g_legacy_set:  supported
+      gs:            silent
+      ls:            silent
+      lss:           silent
+      lv:            silent
+      dcu:           silent
+      fpf:           silent
+      t:             silent
+      tp:            silent
+      pc:            silent
+      ncb:           silent
+      rename:        silent
+      # 2026-04-17 observations (§16.6.10) — library pre-I/O gates, zero tx:
+      dv:            rejected        # firmware-gate (GP family)
+      stream:        rejected        # firmware-gate
+      ncs:           rejected        # firmware-gate
+      dcz:           rejected        # firmware-gate
+      dca:           rejected        # firmware-gate
+      dcfrp:         rejected        # firmware-gate
+      dcfrt:         rejected        # firmware-gate
+      asocv:         rejected        # firmware-gate
+      ffp:           rejected        # firmware-gate
+      l:             rejected        # firmware-gate
+      u:             rejected        # firmware-gate
+      ud:            rejected        # firmware-gate
+      zca:           rejected        # firmware-gate
+      zcp:           rejected        # firmware-gate
+      tc:            rejected        # firmware-gate
+      sr:            rejected        # firmware-gate
+      vd:            rejected        # firmware-gate
+      s:              rejected      # GP family has no S command
+
+  - model: MC-500SCCM-D
+    firmware: 5v12.0-R22
+    family: V1_V7
+    captured_at: "2026-04-17"
+    provenance:
+      serial: "122161"
+      manufactured: "08/14/2015"
+      port: /dev/ttyUSB0
+      baud: 19200
+      unit_id: A
+      note: "Oldest V1_V7 capture. Uses LEGACY ??D* dialect — unlike 6v+. See §16.6.2. End-to-end open_device + poll + rename + tare validated 2026-04-17. Follow-up run on 2026-04-17 (§16.6.10) confirmed the library fixes work on LEGACY dialect too: the ??D* parser maps the LEGACY 'SetPoint' (capital-P, no underscore) column to Statistic.SETPT (generic), and the setpoint field-lookup fix includes SETPT in its _SETPOINT_STATISTICS set so the statistic-based path finds it without falling through to the name-based fallback. Open p50=1026 ms (fastest of all devices — LEGACY rejects FPF so the full-scale sweep is a fast no-op). 500-poll p50=29 ms. Device was on analog setpoint source during the run, so serial writes no-op (expected)."
+    prefix:
+      reads: none
+      writes: none
+    dialects:
+      mm: canonical        # M00..M09 with embedded labels
+      dd: legacy           # NAME/TYPE/MinVal/MaxVal/UNITS columns
+      gg: multi_line
+    commands:
+      poll:          supported
+      ve:            supported
+      mm:            supported
+      dd:            supported
+      gg:            supported
+      g_legacy_set:  supported
+      gs:            fallback   # returns data frame
+      ls:            fallback
+      lss:           fallback
+      lv:            fallback
+      dcu:           adc_counts
+      fpf:           rejected
+      t:             supported
+      tp:            supported
+      pc:            untested       # no barometer advertised (FPF rejected → can't probe)
+      rename:        supported       # `A@ B` round-trip verified via change_unit_id test
+      lcdb:          rejected
+      lca:           fallback
+      vd:            silent
+      zca:           placeholder   # "Feature Not Enabled"
+      zcp:           placeholder
+      ncb:           rejected
+      ncs:           rejected
+      # 2026-04-17 observations (§16.6.10):
+      dv:            supported        # works on LEGACY dialect
+      stream:        rejected         # firmware-gate
+      dcz:           rejected         # firmware-gate
+      asocv:         rejected         # firmware-gate
+      ud:            rejected         # firmware-gate (V1_V7 has no UD)
+      tc:            rejected         # firmware-gate (V10 only)
+      sr:            rejected         # firmware-gate (pre-7v11)
+      s:              supported      # LEGACY dialect: field name 'SetPoint' maps to Statistic.SETPT; _find_setpoint_field catches it
+
+  - model: MCR-775SLPM-D
+    firmware: 6v21.0-R22
+    family: V1_V7
+    captured_at: "2026-04-17"
+    provenance:
+      port: /dev/ttyUSB0
+      baud: 19200
+      unit_id: A
+      note: "Second V1_V7 — already migrated to V8+ canonical ??D* dialect. Dialect boundary sits between 5v12 (2015) and 6v21 (2017). See §16.6.4. End-to-end open_device + poll + rename + tare validated 2026-04-17 (after drain-on-error fix + rename-grace bump; see commit history). ??G* works now (capture-session had an unrelated rejection). PC returns empty reply despite BAROMETER probe — THIRD MCR matching 8v17/8v30 pattern. FPF 344 (absent statistic) emits a two-line reject (\\r then ?\\r) that required the drain-on-error fix to not bleed into the next command. Follow-up run on 2026-04-17 (§16.6.10) confirmed all library fixes carry through on V1_V7 DEFAULT dialect: legacy setpoint decoder works via statistic-based field lookup, DV + dash sentinel, 7 firmware/family gates all zero-tx. Observed ZCA/ZCP return 'Feature Not Enabled' placeholder (not ?) on 6v21 — pre-I/O gate fires before that reaches the wire anyway. Open p50=1472 ms, 500-poll p50=29 ms."
+    prefix:
+      reads: none
+      writes: none
+    dialects:
+      mm: canonical
+      dd: default          # V8+ canonical
+      gg: multi_line
+    commands:
+      poll:          supported
+      ve:            supported
+      mm:            supported
+      dd:            supported
+      gg:            supported       # re-tested 2026-04-17 end-to-end; capture-session rejection was likely transient
+      fpf:           supported       # unlike 5v12
+      dcu:           adc_counts
+      lcdb:          fallback
+      lca:           fallback
+      ls:            fallback
+      lss:           fallback
+      lv:            fallback
+      t:             supported
+      tp:            supported
+      pc:            rejected        # empty reply despite BAROMETER probe positive — THIRD MCR matching 8v17/8v30 pattern
+      rename:        supported        # `A@ B` round-trip verified after _RENAME_GRACE_S bump 50ms→200ms
+      # 2026-04-17 observations (§16.6.10):
+      dv:            supported
+      stream:        rejected         # firmware-gate
+      ncs:           rejected         # firmware-gate
+      dcz:           rejected         # firmware-gate
+      asocv:         rejected         # firmware-gate
+      ud:            rejected         # firmware-gate: V1_V7
+      zca:           placeholder      # "A   Feature Not Enabled" (new reply pattern; library gates pre-I/O anyway)
+      zcp:           placeholder      # "A   Feature Not Enabled"
+      tc:            rejected         # firmware-gate
+      vd:            rejected         # firmware-gate: V1_V7 has no VD
+      sr:            rejected         # firmware-gate: 7v11+ (6v21 below cutoff)
+      s:              supported      # statistic-based field lookup; real flow observed (~2 SLPM) despite vented state
+
+  - model: MCP-50SLPM-D
+    firmware: 7v09.0-R22
+    family: V1_V7
+    captured_at: "2026-04-17"
+    provenance:
+      port: /dev/ttyUSB0
+      baud: 19200
+      unit_id: A
+      note: "Third V1_V7 — confirms 5v12→6v+ dialect boundary. ??G* works here but not on 6v21. See §16.6.5. End-to-end open_device + poll + rename + tare validated 2026-04-17. PC rejected despite BAROMETER probe — FOURTH device matching the pattern (first non-MCR; MCP-50 is a pressure-capable MC variant). Follow-up run on 2026-04-17 (§16.6.10) verified the SR pre-7v11 firmware gate (7v09 is 2 minors below cutoff): SR fires AlicatFirmwareError with zero tx through both session.execute and facade. Also surfaced library fix #8: legacy S setpoint decoder used hardcoded field name 'Setpoint' but real ??D* labels the field Mass_Flow_Setpt (from D06 'Mass Flow Setpt'); the fix switches to a *_SETPT statistic-based lookup. Wire bytes verified correct (b'AS 9.11\\r'); the device config (setpoint source on Analog) causes serial writes to silently no-op, which on V1_V7 cannot be guarded pre-I/O because LSS is V10-only. Open p50=1403 ms, 500-poll p50=28 ms."
+    prefix:
+      reads: none
+      writes: none
+    dialects:
+      mm: canonical
+      dd: default
+      gg: multi_line
+    commands:
+      poll:          supported
+      ve:            supported
+      mm:            supported
+      dd:            supported
+      gg:            supported
+      fpf:           supported
+      dcu:           adc_counts
+      ls:            fallback
+      lss:           fallback
+      lv:            fallback
+      t:             supported
+      tp:            supported
+      pc:            rejected        # FOURTH device with BAROMETER-but-PC-fails pattern (first non-MCR)
+      rename:        supported
+      # 2026-04-17 observations (§16.6.10):
+      dv:            supported        # baro_press → None via dash sentinel
+      stream:        rejected         # firmware-gate
+      ncs:           rejected         # firmware-gate
+      dcz:           rejected         # firmware-gate
+      asocv:         rejected         # firmware-gate
+      ud:            rejected         # firmware-gate: V1_V7 has no UD
+      zca:           rejected         # firmware-gate
+      zcp:           rejected         # firmware-gate
+      tc:            rejected         # firmware-gate
+      vd:            rejected         # firmware-gate: V1_V7 has no VD
+      sr:            untested         # §16.6.10: 7v09 is pre-7v11 so firmware gate fires (zero tx); untested here because no V1_V7 ≥ 7v11 on the bench proves the family admission is useful
+      s:              supported      # with statistic-based field lookup fix; device's analog source makes writes no-op
+
+  - model: MCR-200SLPM-D
+    firmware: 8v17.0-R23
+    family: V8_V9
+    captured_at: "2026-04-17"
+    provenance:
+      serial: "122161"
+      manufactured: "09/24/2015"
+      port: /dev/ttyUSB0
+      baud: 115200
+      unit_id: B
+      note: "Original hardware baseline. ??M* works here despite primer's 8v28+ floor. PC rejected despite BAROMETER probe positive — §16.6.7. Follow-up run on 2026-04-17 (§16.6.10) re-captured at unit A (device had been reconfigured) and verified the VD pre-8v18 firmware gate on the tightest possible boundary (8v17 is one minor below cutoff): VD fires AlicatFirmwareError with zero tx via both session.execute and facade paths. UD pre-8v24 gate also fires. Also recorded the 115200-baud path as a ~5x poll-latency win: p50=5.8 ms, p99=12.8 ms (vs ~29 ms on 19200 devices), with open-time 525 ms (VE times out → factory skips to ??M*, net faster). Capability split BAROMETER=True, TAREABLE_ABSOLUTE_PRESSURE=False confirmed."
+    prefix:
+      reads: none
+      writes: none
+    dialects:
+      mm: canonical
+      dd: default
+      gg: multi_line
+    commands:
+      poll:          supported
+      ve:            rejected        # §16.6.10: 8v17 times out on VE; factory falls back to ??M* only
+      mm:            supported
+      dd:            supported
+      gg:            untested
+      fpf:           supported
+      dcu:           rejected
+      ls:            fallback
+      lss:           fallback
+      lv:            fallback
+      t:             supported
+      tp:            supported
+      pc:            rejected        # despite FPF 15 returning plausible barometer reading
+      lcdb:          fallback
+      lca:           fallback
+      # 2026-04-17 observations (§16.6.10):
+      dv:            supported       # same shape as 8v30
+      stream:        rejected        # firmware-gate
+      ncs:           rejected        # firmware-gate
+      dcz:           rejected        # firmware-gate
+      dca:           rejected        # firmware-gate
+      dcfrp:         rejected        # firmware-gate
+      dcfrt:         rejected        # firmware-gate
+      asocv:         rejected        # firmware-gate
+      ffp:           rejected        # firmware-gate
+      ud:            rejected        # §16.6.10: 8v17 is pre-8v24 UD cutoff — gated pre-I/O
+      zca:           rejected        # firmware-gate
+      zcp:           rejected        # firmware-gate
+      tc:            rejected        # firmware-gate (V10 only)
+      vd:            rejected        # §16.6.10 PRIMARY TEST: 8v17 is pre-8v18 VD cutoff — AlicatFirmwareError pre-I/O, zero tx
+      sr:            supported       # 7v11+; 8v17 is past
+      s:              supported     # V8_V9 < 9v00 uses legacy S
+
+  - model: MCR-500SLPM-D
+    firmware: 8v30.0-R23
+    family: V8_V9
+    captured_at: "2026-04-17"
+    provenance:
+      port: /dev/ttyUSB0
+      baud: 19200
+      unit_id: A
+      note: "At the primer's 8v28+ cutoff for ??M*. Confirms canonical dialect. See §16.6.3. End-to-end open_device + poll + rename + tare + FPF validated 2026-04-17; rejects PC despite advertising BAROMETER — SECOND datapoint matching 8v17 MCR pattern (§16.6.7). Follow-up run on 2026-04-17 (§16.6.10) resolved design §13 open questions Q6 and Q7 on this device: Q6 — DV works on V8/V9 with the same wire shape as V10 (5 statistics decode cleanly, dash sentinel for absent slots). Q7 — LS/LSS/LV are firmware-gated out on V8/V9 ≤ 8v30 (LS requires V8_V9 ≥ 9v00 or V10; LSS requires V10; LV requires 9v00+). The 5-field LS current/requested split is a V10/9v00+ feature only; library gates are correct. Legacy S setpoint path works here with the statistic-based field lookup fix. Open p50=1443 ms, 500-poll p50=31 ms."
+    prefix:
+      reads: none
+      writes: none
+    dialects:
+      mm: canonical
+      dd: default
+      gg: multi_line
+    commands:
+      poll:          supported
+      ve:            supported
+      mm:            supported
+      dd:            supported
+      gg:            supported
+      fpf:           supported
+      dcu:           rejected
+      ls:            fallback
+      lss:           fallback
+      lv:            fallback
+      t:             supported
+      tp:            supported
+      pc:            rejected       # despite FPF 15 returning plausible barometer reading — MATCHES 8v17 MCR pattern
+      rename:        supported       # `A@ B` round-trip verified via change_unit_id test
+      lcdb:          fallback
+      lca:           fallback
+      # 2026-04-17 observations (§16.6.10):
+      dv:            supported       # Q6 resolved: same wire shape as V10, dash sentinel → None
+      ls:            rejected        # Q7 resolved: AlicatFirmwareError — V8_V9 < 9v00 uses legacy S only
+      lss:           rejected        # firmware-gate: V10 only
+      lv:            rejected        # firmware-gate: 9v00+
+      s:              supported     # legacy S path works with statistic-based field lookup fix
+      stream:        rejected        # firmware-gate: NCS 10v05+
+      ncs:           rejected        # firmware-gate
+      dcz:           rejected        # firmware-gate: 10v05+
+      dca:           rejected        # firmware-gate
+      dcfrp:         rejected        # firmware-gate
+      dcfrt:         rejected        # firmware-gate
+      asocv:         rejected        # firmware-gate
+      ffp:           untested        # §16.6.10: AlicatFirmwareError pre-I/O (zero tx); untested here — no DISPLAY-advertising V8/V9 device on the bench proves the family admission
+      l:             untested        # same DISPLAY coverage gap
+      u:             untested        # same DISPLAY coverage gap
+      ud:            supported       # 8v24+; empty-slot "A " decoder fix works here too
+      zca:           rejected        # firmware-gate
+      zcp:           rejected        # firmware-gate
+      tc:            rejected        # firmware-gate: family_not_supported (V10 only)
+      t:             supported       # 8v00+; no-confirm gate fires with zero tx
+      tp:            supported       # 8v00+; no-confirm gate fires with zero tx
+      sr:            supported       # 7v11+; 8v30 is past
+      vd:            supported       # §16.6.10: 4-column fixed width
+
+  - model: MC-5SLPM-D
+    firmware: 10v03.0-R24
+    family: V10
+    captured_at: "2026-04-17"
+    provenance:
+      serial: "402739"
+      manufactured: "07/28/2022"
+      calibrated: "11/20/2024"
+      port: /dev/ttyUSB0
+      baud: 19200
+      unit_id: A
+      note: "First pre-10v05 V10 *controller* (10v04 was a meter). Validates that LS/LV work pre-10v05 on a controller, while GS/DCU/LSS/NCB/ZCA/ZCP correctly hit the firmware_too_old gate. End-to-end open_device + poll + rename + tare validated 2026-04-17. Follow-up run on 2026-04-17 (§16.6.10) added the primary firmware-gate zero-tx verification: NCS/DCZ/LCDB/ZCA/ZCP/LSS all fire AlicatFirmwareError pre-I/O with zero tx frames on real hardware. TC (10v00+) works here with the 7-field id-echo reply. DV supported with dash-sentinel → None for absent slots. Open-time p50=1467 ms, 500-poll p50=29.5 ms."
+    prefix:
+      reads: none
+      writes: none
+    dialects:
+      mm: canonical
+      dd: default
+      gg: multi_line
+    commands:
+      poll:          supported
+      ve:            supported
+      mm:            supported
+      dd:            supported
+      gg:            supported
+      fpf:           supported
+      dcu:           rejected         # pre-10v05
+      gs:            rejected          # pre-10v05
+      ls:            supported         # 9v00+; works on a controller
+      lss:           rejected          # pre-10v05
+      lv:            supported          # 9v00+
+      t:             supported
+      tp:            supported
+      pc:            untested          # no barometer advertised
+      rename:        supported
+      # Specialty + totalizer coverage with firmware-gate discipline:
+      dv:            supported        # §16.6.10: 5-statistic request decodes cleanly
+      stream:        rejected         # firmware-gate: NCS requires 10v05+
+      ncs:           rejected         # firmware-gate, zero tx (§16.6.10)
+      dcz:           rejected         # firmware-gate, zero tx
+      dca:           rejected         # firmware-gate, zero tx
+      dcfrp:         rejected         # firmware-gate, zero tx
+      dcfrt:         rejected         # firmware-gate, zero tx
+      asocv:         rejected         # firmware-gate fires before capability gate
+      ffp:           rejected         # firmware-gate
+      l:             rejected         # firmware-gate
+      u:             rejected         # firmware-gate
+      ud:            rejected         # V10 UD firmware-gated pre-10v05
+      zca:           rejected         # firmware-gate
+      zcp:           rejected         # firmware-gate
+      tc:            supported        # §16.6.10: 10v00+, 7-field id-echo reply
+      hp:            supported        # valve hold works on 10v03
+      hc:            supported        # confirm=False gated pre-I/O
+      c:             supported
+      sr:            supported        # 7v11+; 10v03 is past
+      lcdb:          rejected         # firmware-gate: 10v05+
+      vd:            supported        # §16.6.10: 4-column reply
+
+  - model: MW-10SLPM-D
+    firmware: 10v04.0-R24
+    family: V10
+    captured_at: "2026-04-17"
+    provenance:
+      manufactured: "08/02/2022"
+      port: /dev/ttyUSB0
+      baud: 19200
+      unit_id: A
+      note: "Pre-10v05 V10 meter. Validates meter (5-field ??D*) + the 10v05+ firmware gates + DeviceKind gate (setpoint/LSS/LV skip pre-I/O because device_kinds excludes FLOW_METER). See §16.6.1. End-to-end open_device + poll + rename + tare validated 2026-04-17. Follow-up run on 2026-04-17 (§16.6.10) verified DeviceKind gate zero-tx discipline: setpoint/setpoint_source/loop_control_variable/ramp_rate/deadband_limit/valve_drive/hold_valves/auto_tare all fire AlicatUnsupportedCommandError or AlicatFirmwareError pre-I/O with zero tx frames. Also surfaced library fix #7: DV on meter returns wide ------- dash sentinel for unsupported MASS_FLOW_SETPT, decoder now treats any pure-dash run as the absent sentinel. Open p50=1423 ms, 500-poll p50=25.3 ms (fastest of the V10 devices — 5-field frame)."
+    prefix:
+      reads: none
+      writes: none
+    dialects:
+      mm: canonical
+      dd: default
+      gg: multi_line
+    commands:
+      poll:          supported
+      ve:            supported
+      mm:            supported
+      dd:            supported
+      gg:            supported
+      fpf:           supported
+      dcu:           rejected         # pre-10v05
+      gs:            rejected
+      ls:            placeholder      # "A   1 ---" — meter has no setpoint (raw capture; runtime blocked by DeviceKind gate)
+      lss:           placeholder
+      lv:            fallback
+      t:             supported
+      tp:            supported
+      pc:            untested          # no barometer advertised
+      rename:        supported
+      lcdb:          fallback
+      lca:           fallback
+      ncb:           rejected
+      ncs:           rejected
+      zca:           rejected
+      zcp:           rejected
+      vd:            supported
+      # Specialty + totalizer coverage with DeviceKind gate discipline:
+      dv:            supported        # §16.6.10: MASS_FLOW_SETPT → '-------' (wide dash sentinel → None); DV decoder fixed
+      stream:        rejected         # firmware-gate: NCS 10v05+
+      dcz:           rejected         # firmware-gate
+      dca:           rejected         # firmware-gate
+      dcfrp:         rejected         # firmware-gate
+      dcfrt:         rejected         # firmware-gate
+      asocv:         rejected         # firmware-gate
+      ffp:           rejected         # firmware-gate
+      ud:            rejected         # firmware-gate
+      tc:            supported        # §16.6.10: works on 10v04 meter; 7-field id-echo reply
+      # DeviceKind gates (meter-only — controller commands fail pre-I/O):
+      # (ls above already records the meter-gate status for setpoint query)
+      sr:            rejected         # controller-only + firmware-gate
+      hp:            rejected         # controller-only
+      hc:            rejected         # controller-only
+      c:             rejected         # controller-only
+
+  - model: MC-500SCCM-D
+    firmware: 10v20.0-R24
+    family: V10
+    captured_at: "2026-04-17"
+    provenance:
+      manufactured: "01/09/2025"
+      port: /dev/ttyUSB0
+      baud: 19200
+      unit_id: A
+      note: "Modern V10 controller. Full command surface. See §16.6 (first-session quick borrow) + second-session comprehensive run. Follow-up on 2026-04-17 (§16.6.10) exercised the full surface on this device: 1000-poll latency p50=27.3 ms, open-time p50=1507 ms, streaming (rate_ms=None/100/50) at 50 ms cadence with p99=51 ms, NCS round-trip, concurrent-command streaming-gate fast-fail in 0.088 ms, exception-in-body stop-stream recovery, non-destructive specialty, totalizer with wire-trace proof that AT 1/ATP 1 frames carry the numeric argument (token-collision invariant holds), setpoint/LSS/LV INFO log once per write, and 10-minute 10 Hz sink soak into SQLite/Parquet/CSV/JSONL/InMemory with 6000/6000 row-count parity. Six library fixes found and regression-guarded: streaming space-prefix normalization, DCA 2-field reply, UD 1-field empty-slot reply, TC 7-field id-echo reply, sample_to_row case-duplicate Unit_ID, VD fixed-width 4 columns."
+    prefix:
+      reads: none
+      writes: none
+    dialects:
+      mm: canonical
+      dd: default
+      gg: multi_line
+    commands:
+      poll:          supported
+      ve:            supported
+      mm:            supported
+      dd:            supported
+      gg:            supported
+      fpf:           supported
+      dcu:           supported
+      gs:            supported
+      g_legacy_set:  untested     # legacy dispatch not exercised on V10
+      ls:            supported
+      lss:           supported
+      lv:            supported
+      t:             supported       # §16.6.10: AT 1\r wire-trace verified; no T\r collision
+      tp:            supported       # §16.6.10: ATP 1\r wire-trace verified; no TP\r collision
+      tcr:           supported       # §16.6.10: toggle False→True→False round-trip
+      pc:            untested     # no barometer on MC-5SLPM variant
+      lcdb:          supported
+      lca:           supported
+      vd:            supported       # §16.6.10: 4-column reply (100.00 000.00 000.00 000.00)
+      ncb:           supported     # verified in change_baud_rate round-trip
+      rename:        supported     # verified in change_unit_id round-trip (after §16.6.7 drain fix)
+      # Specialty / totalizer coverage:
+      dv:            supported       # §16.6.10: 7-statistic request, --/------- → None
+      stream:        supported       # §16.6.10: after streaming-frame prefix fix (space-prefix)
+      ncs:           supported       # §16.6.10: query + write round-trip (50 → 100 → 50)
+      dcz:           supported       # §16.6.10: zero_band=0.0 default
+      dca:           supported       # §16.6.10: 2-field reply (uid + avg_ms); decoder fixed
+      dcfrp:         supported       # §16.6.10: STP/NTP both 14.696 PSIA
+      dcfrt:         supported       # §16.6.10: STP=25.0 NTP=0.0 °C
+      asocv:         untested        # §16.6.10: AlicatCapabilityError fires pre-I/O (zero tx); untested here to mark the coverage gap — no ANALOG_OUTPUT-advertising V10 device on the bench
+      ffp:           untested        # §16.6.10: AlicatCapabilityError fires pre-I/O (zero tx); untested here — no DISPLAY-advertising V10 device on the bench
+      l:             untested        # same DISPLAY coverage gap
+      u:             untested        # same DISPLAY coverage gap
+      ud:            supported       # §16.6.10: empty-slot reply is just "A " (1 token); decoder fixed
+      zca:           supported       # enabled=True delay=1.1s; disable form (ZCA 0 0) rejected — device quirk, not library
+      zcp:           supported       # query + enable + disable round-trip
+      tc:            supported       # §16.6.10: 7-field reply with totalizer_id echo; decoder fixed
+      hp:            supported       # valve hold; post-op frame carries HLD status
+      hc:            supported       # confirm=False → AlicatValidationError pre-I/O (zero tx)
+      c:             supported       # cancel-hold clears HLD bit
+      sr:            supported       # query + set 10 SCCM/s + restore to 0
+      s:              untested      # V10 always uses LS; legacy S path never dispatched here

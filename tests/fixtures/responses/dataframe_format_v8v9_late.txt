@@ -1,0 +1,38 @@
+# scenario: ??D* on a real V8/V9 controller (MCR-500SLPM-D, 8v30.0-R23)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud, unit_id=A).
+#
+# 8v30 sits at the documented ??M* primer cutoff and uses the *canonical*
+# V8+ ??D* dialect — byte-identical in shape to the 6v21, 8v17, 10v04, and
+# 10v20 captures. Confirms the dialect is stable across firmware versions
+# from 6v through 10v.
+#
+# Per-device variation observed here vs other captures:
+#   - Width column: `7/2` for Volu Flow / Mass Flow (8v17 + 10v20 used
+#     `7/2`; 10v04 used `7/3`). So precision varies per device,
+#     not per firmware-version (verified by comparing 8v17 + 8v30 +
+#     10v20 all using `7/2` and 10v04 using `7/3`).
+#   - Status flag list lacks `COM`, `GTA`, `P2O` that appear on 10v20.
+#     Added in later firmware. The parser is shape-agnostic to flag
+#     count.
+
+> A??D*
+< A D00 ID_ NAME______________________ TYPE_______ WIDTH NOTES___________________
+< A D01 700 Unit ID                    string          1
+< A D02 002 Abs Press                  s decimal     7/2 010 02 PSIA
+< A D03 003 Flow Temp                  s decimal     7/2 002 02 `C
+< A D04 004 Volu Flow                  s decimal     7/2 007 02 LPM
+< A D05 005 Mass Flow                  s decimal     7/2 007 02 SLPM
+< A D06 037 Mass Flow Setpt            s decimal     7/2 007 02 SLPM
+< A D07 703 Gas                        string          6
+< A D08 701 *Error                     string          3 ADC
+< A D09 702 *Status                    string          3 OPL
+< A D10 702 *Status                    string          3 POV
+< A D11 702 *Status                    string          3 P2O
+< A D12 702 *Status                    string          3 TOV
+< A D13 702 *Status                    string          3 VOV
+< A D14 702 *Status                    string          3 MOV
+< A D15 702 *Status                    string          3 TMF
+< A D16 702 *Status                    string          3 OVR
+< A D17 702 *Status                    string          3 HLD
+< A D18 702 *Status                    string          3 EXH
+< A D19 702 *Status                    string          3 LCK

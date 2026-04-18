@@ -1,0 +1,50 @@
+# scenario: ??D* on an MC-500SCCM-D flow controller (V10, 10v20.0-R24)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 19200 baud).
+#
+# This *replaces* the prior synthetic fixture which was a guess. The
+# shape matches the V8/V9 8v17 capture (dataframe_format_v8.txt)
+# byte-for-byte aside from per-device unit codes / status flags.
+#
+# Format (canonical Alicat, see design §16.6):
+#   - First line: column header — `<uid> D00 ID_ NAME______________________ TYPE_______ WIDTH NOTES___________________`
+#   - Field rows: `<uid> D<NN> <stat_code> <fixed-width name> <type token(s)> <width/precision> [<unit_code> <unit_label>]`
+#     where the name is right-padded to ~26 chars, type is `string` or `s decimal` (signed) or similar.
+#   - Status flag rows: one row per flag, all sharing stat code 702, with
+#     the per-flag mnemonic in the NOTES column. Conditional fields are
+#     marked `*<name>` (e.g. `*Status`).
+#   - Trailing empty line.
+#
+# Field semantics for this MC- device (matches the poll order):
+#   D01 700 Unit ID         string  1
+#   D02 002 Abs Press       decimal PSIA
+#   D03 003 Flow Temp       decimal °C
+#   D04 004 Volu Flow       decimal CCM
+#   D05 005 Mass Flow       decimal SCCM
+#   D06 037 Mass Flow Setpt decimal SCCM
+#   D07 703 Gas             string  6
+#   D08 *Error              (conditional)
+#   D09..D21 *Status        (conditional, per-flag rows)
+
+> A??D*
+< A D00 ID_ NAME______________________ TYPE_______ WIDTH NOTES___________________
+< A D01 700 Unit ID                    string          1
+< A D02 002 Abs Press                  s decimal     7/2 010 02 PSIA
+< A D03 003 Flow Temp                  s decimal     7/2 002 02 `C
+< A D04 004 Volu Flow                  s decimal     7/2 012 02 CCM
+< A D05 005 Mass Flow                  s decimal     7/2 012 02 SCCM
+< A D06 037 Mass Flow Setpt            s decimal     7/2 012 02 SCCM
+< A D07 703 Gas                        string          6
+< A D08 701 *Error                     string          3 ADC
+< A D09 702 *Status                    string          3 OPL
+< A D10 702 *Status                    string          3 POV
+< A D11 702 *Status                    string          3 P2O
+< A D12 702 *Status                    string          3 TOV
+< A D13 702 *Status                    string          3 VOV
+< A D14 702 *Status                    string          3 MOV
+< A D15 702 *Status                    string          3 TMF
+< A D16 702 *Status                    string          3 OVR
+< A D17 702 *Status                    string          3 COM
+< A D18 702 *Status                    string          3 HLD
+< A D19 702 *Status                    string          3 EXH
+< A D20 702 *Status                    string          3 GTA
+< A D21 702 *Status                    string          3 LCK

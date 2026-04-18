@@ -5,12 +5,13 @@ from __future__ import annotations
 import pytest
 
 from alicatlib.config import AlicatConfig, config_from_env
+from tests._typing import approx
 
 
 class TestAlicatConfig:
     def test_defaults(self) -> None:
         cfg = AlicatConfig()
-        assert cfg.default_timeout_s == pytest.approx(0.5)
+        assert cfg.default_timeout_s == approx(0.5)
         assert cfg.default_baudrate == 19200
         assert cfg.drain_before_write is False
 
@@ -29,20 +30,20 @@ class TestAlicatConfig:
 class TestConfigFromEnv:
     def test_returns_defaults_when_env_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for key in (
-            "PYALICAT_DEFAULT_TIMEOUT_S",
-            "PYALICAT_DEFAULT_BAUDRATE",
-            "PYALICAT_DRAIN_BEFORE_WRITE",
+            "ALICATLIB_DEFAULT_TIMEOUT_S",
+            "ALICATLIB_DEFAULT_BAUDRATE",
+            "ALICATLIB_DRAIN_BEFORE_WRITE",
         ):
             monkeypatch.delenv(key, raising=False)
         cfg = config_from_env()
         assert cfg == AlicatConfig()
 
     def test_reads_well_known_keys(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("PYALICAT_DEFAULT_TIMEOUT_S", "1.25")
-        monkeypatch.setenv("PYALICAT_DEFAULT_BAUDRATE", "115200")
-        monkeypatch.setenv("PYALICAT_DRAIN_BEFORE_WRITE", "true")
+        monkeypatch.setenv("ALICATLIB_DEFAULT_TIMEOUT_S", "1.25")
+        monkeypatch.setenv("ALICATLIB_DEFAULT_BAUDRATE", "115200")
+        monkeypatch.setenv("ALICATLIB_DRAIN_BEFORE_WRITE", "true")
         cfg = config_from_env()
-        assert cfg.default_timeout_s == pytest.approx(1.25)
+        assert cfg.default_timeout_s == approx(1.25)
         assert cfg.default_baudrate == 115200
         assert cfg.drain_before_write is True
 
@@ -63,15 +64,15 @@ class TestConfigFromEnv:
     def test_bool_env_parsing(
         self, monkeypatch: pytest.MonkeyPatch, value: str, expected: bool
     ) -> None:
-        monkeypatch.setenv("PYALICAT_DRAIN_BEFORE_WRITE", value)
+        monkeypatch.setenv("ALICATLIB_DRAIN_BEFORE_WRITE", value)
         cfg = config_from_env()
         assert cfg.drain_before_write is expected
 
     def test_unparseable_numeric_falls_back_silently(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("PYALICAT_DEFAULT_TIMEOUT_S", "not-a-number")
-        monkeypatch.setenv("PYALICAT_DEFAULT_BAUDRATE", "also-bad")
+        monkeypatch.setenv("ALICATLIB_DEFAULT_TIMEOUT_S", "not-a-number")
+        monkeypatch.setenv("ALICATLIB_DEFAULT_BAUDRATE", "also-bad")
         cfg = config_from_env()
-        assert cfg.default_timeout_s == pytest.approx(0.5)
+        assert cfg.default_timeout_s == approx(0.5)
         assert cfg.default_baudrate == 19200
 
     def test_custom_prefix(self, monkeypatch: pytest.MonkeyPatch) -> None:

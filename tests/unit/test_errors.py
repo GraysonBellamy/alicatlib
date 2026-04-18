@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from alicatlib.errors import (
     AlicatError,
     AlicatFirmwareError,
@@ -13,7 +11,8 @@ from alicatlib.errors import (
     ErrorContext,
     UnknownGasError,
 )
-from alicatlib.firmware import FirmwareVersion
+from alicatlib.firmware import FirmwareFamily, FirmwareVersion
+from tests._typing import approx
 
 
 class TestErrorContext:
@@ -73,8 +72,8 @@ class TestAlicatFirmwareError:
         err = AlicatFirmwareError(
             command="auto_tare",
             reason="firmware_too_old",
-            actual=FirmwareVersion(9, 0),
-            required_min=FirmwareVersion(10, 5),
+            actual=FirmwareVersion(family=FirmwareFamily.V8_V9, major=9, minor=0, raw="9v00"),
+            required_min=FirmwareVersion(family=FirmwareFamily.V10, major=10, minor=5, raw="10v05"),
         )
         msg = str(err)
         assert "auto_tare" in msg
@@ -88,5 +87,5 @@ class TestWithContext:
         enriched = original.with_context(port="/dev/ttyUSB0", elapsed_s=0.25)
         assert original.context.port is None
         assert enriched.context.port == "/dev/ttyUSB0"
-        assert enriched.context.elapsed_s == pytest.approx(0.25)
+        assert enriched.context.elapsed_s == approx(0.25)
         assert enriched.context.command_name == "poll"

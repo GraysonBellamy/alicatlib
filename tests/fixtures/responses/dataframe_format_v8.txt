@@ -1,0 +1,56 @@
+# scenario: ??D* on a real V8/V9 device (8v17.0-R23, MCR-200SLPM-D)
+# Captured 2026-04-17 from /dev/ttyUSB0 (Prolific PL2303, 115200 baud).
+#
+# This dialect is significantly different from the 10v05+ ??D* format the
+# current parser handles:
+#
+#   1. The first line is a *column-header* row, not a count header:
+#        `B D00 ID_ NAME______________________ TYPE_______ WIDTH NOTES___________________`
+#      The current `_df_format_is_complete` predicate looks for `<uid> D<NN> <int>`
+#      and never matches here, so termination falls through to the idle-timeout.
+#
+#   2. Field rows carry six+ fixed-width columns, not three:
+#        <uid> D<NN> <statistic_code> <name with internal spaces> <type> <width/precision> [<unit_code> <unit_label>]
+#      The current regex `<uid> D<NN> [*]<name> <type>` therefore mis-reads the
+#      statistic code as the name and the first word of the human name as the type.
+#
+#   3. Field names contain literal spaces (`Mass Flow`, `Mass Flow Setpt`, `Flow Temp`).
+#      The synthetic 10v05+ fixture uses underscored names (`Mass_Flow`, `Setpoint`).
+#
+#   4. The `type` column carries compound tokens like `s decimal` (signed decimal)
+#      and bare `string`. The 10v05+ form uses bare `decimal` / `text`.
+#
+#   5. Status flags appear as one row per flag, all sharing statistic code `702`,
+#      with the per-flag code (`OPL`, `POV`, `P2O`, ...) in the NOTES column.
+#      The `*` prefix marks them conditional — same convention as 10v05+.
+#
+#   6. Engineering units are embedded in the row's NOTES column (`PSIA`, `SLPM`),
+#      so `DataFrameField.unit` could be bound at ??D* time on V8/V9 — earlier
+#      than the 10v05+ flow which relies on a follow-up `DCU` probe.
+#
+# Together these mean the V8/V9 dialect needs its own
+# `DataFrameFormatFlavor.VARIABLE_V8` parser path. Until that lands, polling
+# this device through `Session.poll()` returns a single bogus
+# `{"ID_": "<uid>"}` value (the column-header row gets mis-parsed as a field).
+
+> B??D*
+< B D00 ID_ NAME______________________ TYPE_______ WIDTH NOTES___________________
+< B D01 700 Unit ID                    string          1
+< B D02 002 Abs Press                  s decimal     7/2 010 02 PSIA
+< B D03 003 Flow Temp                  s decimal     7/2 002 02 `C
+< B D04 004 Volu Flow                  s decimal     7/2 007 02 LPM
+< B D05 005 Mass Flow                  s decimal     7/2 007 02 SLPM
+< B D06 037 Mass Flow Setpt            s decimal     7/2 007 02 SLPM
+< B D07 703 Gas                        string          6
+< B D08 701 *Error                     string          3 ADC
+< B D09 702 *Status                    string          3 OPL
+< B D10 702 *Status                    string          3 POV
+< B D11 702 *Status                    string          3 P2O
+< B D12 702 *Status                    string          3 TOV
+< B D13 702 *Status                    string          3 VOV
+< B D14 702 *Status                    string          3 MOV
+< B D15 702 *Status                    string          3 TMF
+< B D16 702 *Status                    string          3 OVR
+< B D17 702 *Status                    string          3 HLD
+< B D18 702 *Status                    string          3 EXH
+< B D19 702 *Status                    string          3 LCK
