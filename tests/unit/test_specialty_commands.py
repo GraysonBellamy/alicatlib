@@ -309,10 +309,7 @@ class TestAutoTare:
 
     def test_disable_with_delay_ignored(self, ctx_v10: DecodeContext) -> None:
         """``enable=False`` always uses the bare-``0`` form; ``delay_s`` is ignored."""
-        assert (
-            AUTO_TARE.encode(ctx_v10, AutoTareRequest(enable=False, delay_s=1.5))
-            == b"AZCA 0\r"
-        )
+        assert AUTO_TARE.encode(ctx_v10, AutoTareRequest(enable=False, delay_s=1.5)) == b"AZCA 0\r"
 
     def test_delay_below_min_raises(self, ctx_v10: DecodeContext) -> None:
         with pytest.raises(AlicatValidationError):

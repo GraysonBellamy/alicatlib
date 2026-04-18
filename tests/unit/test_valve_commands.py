@@ -172,9 +172,7 @@ class TestValveDriveDecode:
         columns even on meter/no-valve cases" (medium confidence);
         This test promotes that observation to canonical behavior.
         """
-        state = VALVE_DRIVE.decode(
-            b"A 100.00 000.00 000.00 000.00", ctx_v10_no_format
-        )
+        state = VALVE_DRIVE.decode(b"A 100.00 000.00 000.00 000.00", ctx_v10_no_format)
         assert state.unit_id == "A"
         assert state.valves == (100.0, 0.0, 0.0, 0.0)
 
