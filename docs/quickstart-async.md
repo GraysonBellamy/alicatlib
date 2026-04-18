@@ -5,7 +5,7 @@ import anyio
 from alicatlib import Gas, Unit, open_device
 
 async def main() -> None:
-    async with await open_device("/dev/ttyUSB0") as dev:
+    async with open_device("/dev/ttyUSB0") as dev:
         frame = await dev.poll()
         print(frame.get_float("Mass_Flow"))
 

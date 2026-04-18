@@ -15,7 +15,7 @@ See [Design](design.md) §5.8 for the authoritative architecture and
 ## Opening a stream
 
 ```python
-async with await open_device("/dev/ttyUSB0") as dev:
+async with open_device("/dev/ttyUSB0") as dev:
     async with dev.stream(rate_ms=50) as stream:
         async for frame in stream:
             print(frame.get_float("Mass_Flow"))

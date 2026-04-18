@@ -80,6 +80,7 @@ class TestFindDevices:
             baudrates: tuple[int, ...],
             timeout: float,
             max_concurrency: int,
+            stop_on_first_hit: bool,
         ) -> tuple[DiscoveryResult, ...]:
             captured.update(
                 {
@@ -88,6 +89,7 @@ class TestFindDevices:
                     "baudrates": baudrates,
                     "timeout": timeout,
                     "max_concurrency": max_concurrency,
+                    "stop_on_first_hit": stop_on_first_hit,
                 },
             )
             return (_make_result("/dev/ttyUSB0"),)
@@ -99,11 +101,13 @@ class TestFindDevices:
             baudrates=(19200,),
             timeout=0.1,
             max_concurrency=4,
+            stop_on_first_hit=True,
         )
         assert len(results) == 1
         assert captured["ports"] == ["/dev/ttyUSB0", "/dev/ttyUSB1"]
         assert captured["unit_ids"] == ("A", "B")
         assert captured["max_concurrency"] == 4
+        assert captured["stop_on_first_hit"] is True
 
     def test_none_ports_passes_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def _stub(

@@ -423,6 +423,226 @@ class TestFindDevices:
         assert peak <= 3
 
     @pytest.mark.anyio
+    async def test_same_port_probes_serialise(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Regression: probes targeting the same physical port must not
+        overlap.
+
+        A serial port can only be held by one transport at a time. A sweep
+        that tries two baud rates on one port used to race two ``probe``
+        calls against the same device handle — the loser got a spurious
+        ``PortBusyError`` or worse a silent read of the other baud's
+        byte stream. :func:`find_devices` now takes a per-port lock so
+        same-port combinations queue up and different-port combinations
+        still run in parallel.
+        """
+        import anyio
+
+        in_flight_per_port: dict[str, int] = {}
+        peak_per_port: dict[str, int] = {}
+
+        async def fake_probe(
+            port: str,
+            *,
+            unit_id: str = "A",
+            baudrate: int = 19200,
+            timeout: float = 0.2,
+        ) -> DiscoveryResult:
+            del timeout, unit_id
+            in_flight_per_port[port] = in_flight_per_port.get(port, 0) + 1
+            peak_per_port[port] = max(peak_per_port.get(port, 0), in_flight_per_port[port])
+            await anyio.sleep(0.01)
+            in_flight_per_port[port] -= 1
+            return DiscoveryResult(
+                port=port,
+                unit_id="A",
+                baudrate=baudrate,
+                info=None,
+                error=None,
+            )
+
+        monkeypatch.setattr(discovery, "probe", fake_probe)
+
+        await find_devices(
+            ports=["/dev/ttyUSB0", "/dev/ttyUSB1"],
+            unit_ids=("A", "B"),
+            baudrates=(19200, 115200),
+            max_concurrency=8,
+        )
+        # 4 combinations per port, but at most 1 should be in flight at a time.
+        assert peak_per_port == {"/dev/ttyUSB0": 1, "/dev/ttyUSB1": 1}
+
+    @pytest.mark.anyio
+    async def test_different_port_probes_run_in_parallel(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The per-port lock only serialises *same-port* combinations —
+        unrelated ports must still run concurrently, otherwise a large
+        fleet sweep would serialise the whole world."""
+        import anyio
+
+        in_flight = 0
+        peak = 0
+
+        async def fake_probe(
+            port: str,
+            *,
+            unit_id: str = "A",
+            baudrate: int = 19200,
+            timeout: float = 0.2,
+        ) -> DiscoveryResult:
+            del timeout, unit_id
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            await anyio.sleep(0.01)
+            in_flight -= 1
+            return DiscoveryResult(
+                port=port,
+                unit_id="A",
+                baudrate=baudrate,
+                info=None,
+                error=None,
+            )
+
+        monkeypatch.setattr(discovery, "probe", fake_probe)
+
+        await find_devices(
+            ports=[f"/dev/ttyUSB{i}" for i in range(4)],
+            unit_ids=("A",),
+            baudrates=(19200,),
+            max_concurrency=8,
+        )
+        # 4 distinct ports, 4 probes — per-port lock does not block them.
+        assert peak == 4
+
+    @pytest.mark.anyio
+    async def test_stop_on_first_hit_skips_other_bauds_same_port(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Once a probe at ``(port, uid, baud)`` succeeds, probes at
+        ``(port, uid, baud')`` for ``baud' != baud`` don't run — the bus
+        is already known to be at ``baud``.
+        """
+        calls: list[tuple[str, str, int]] = []
+
+        async def fake_probe(
+            port: str,
+            *,
+            unit_id: str = "A",
+            baudrate: int = 19200,
+            timeout: float = 0.2,
+        ) -> DiscoveryResult:
+            del timeout
+            calls.append((port, unit_id, baudrate))
+            if baudrate == 19200:
+                return DiscoveryResult(
+                    port=port,
+                    unit_id=unit_id,
+                    baudrate=baudrate,
+                    info=_fake_info(),
+                    error=None,
+                )
+            return DiscoveryResult(
+                port=port,
+                unit_id=unit_id,
+                baudrate=baudrate,
+                info=None,
+                error=AlicatTimeoutError("wrong baud"),
+            )
+
+        monkeypatch.setattr(discovery, "probe", fake_probe)
+        results = await find_devices(
+            ports=["/dev/ttyUSB0"],
+            unit_ids=("A",),
+            baudrates=(19200, 115200),
+            stop_on_first_hit=True,
+        )
+        assert calls == [("/dev/ttyUSB0", "A", 19200)]
+        assert len(results) == 1
+        assert results[0].ok
+
+    @pytest.mark.anyio
+    async def test_stop_on_first_hit_still_probes_other_unit_ids(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Short-circuit is keyed on baud, not on port-as-a-whole. On an
+        RS-485 bus, ``(port, A, 19200)`` succeeding does not mean
+        ``(port, B, 19200)`` should be skipped — a second device may
+        share the bus.
+        """
+        calls: list[tuple[str, str, int]] = []
+
+        async def fake_probe(
+            port: str,
+            *,
+            unit_id: str = "A",
+            baudrate: int = 19200,
+            timeout: float = 0.2,
+        ) -> DiscoveryResult:
+            del timeout
+            calls.append((port, unit_id, baudrate))
+            return DiscoveryResult(
+                port=port,
+                unit_id=unit_id,
+                baudrate=baudrate,
+                info=_fake_info(),
+                error=None,
+            )
+
+        monkeypatch.setattr(discovery, "probe", fake_probe)
+        results = await find_devices(
+            ports=["/dev/ttyUSB0"],
+            unit_ids=("A", "B"),
+            baudrates=(19200, 115200),
+            stop_on_first_hit=True,
+        )
+        # A@19200 hits, B@19200 still probed, B@115200 skipped (wrong baud).
+        # A@115200 is also skipped. Two results remain.
+        hit_bauds = {(c[1], c[2]) for c in calls}
+        assert hit_bauds == {("A", 19200), ("B", 19200)}
+        assert len(results) == 2
+
+    @pytest.mark.anyio
+    async def test_stop_on_first_hit_default_false_preserves_full_sweep(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Default keeps the "every combination produces a result" contract."""
+        calls: list[tuple[str, str, int]] = []
+
+        async def fake_probe(
+            port: str,
+            *,
+            unit_id: str = "A",
+            baudrate: int = 19200,
+            timeout: float = 0.2,
+        ) -> DiscoveryResult:
+            del timeout
+            calls.append((port, unit_id, baudrate))
+            return DiscoveryResult(
+                port=port,
+                unit_id=unit_id,
+                baudrate=baudrate,
+                info=_fake_info(),
+                error=None,
+            )
+
+        monkeypatch.setattr(discovery, "probe", fake_probe)
+        results = await find_devices(
+            ports=["/dev/ttyUSB0"],
+            unit_ids=("A",),
+            baudrates=(19200, 115200),
+        )
+        assert len(calls) == 2
+        assert len(results) == 2
+
+    @pytest.mark.anyio
     async def test_never_raises_on_individual_failure(
         self,
         monkeypatch: pytest.MonkeyPatch,

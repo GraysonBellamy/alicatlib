@@ -557,8 +557,24 @@ def _df_canonicalise_name(name: str) -> str:
     return name.strip().replace(" ", "_")
 
 
-def _df_resolve_statistic(*candidates: str) -> Statistic | None:
-    """Try each candidate name through the statistic registry; first hit wins."""
+def _df_resolve_statistic(
+    *candidates: str,
+    code: str | None = None,
+) -> Statistic | None:
+    """Resolve the typed :class:`Statistic` for a ``??D*`` field row.
+
+    The V8+ ``??D*`` dialect carries an authoritative numeric stat code
+    (e.g. ``703`` for Fluid Name) alongside each field. That code is
+    preferred over name matching because wire names for text fields
+    (``"Gas"`` for code 703) don't round-trip through the statistic
+    registry's alias table. The V1_V7 dialect has no stat-code column
+    and falls back to name-only lookup.
+    """
+    if code is not None and code.isdigit():
+        try:
+            return statistic_registry.by_code(int(code))
+        except UnknownStatisticError:
+            pass
     for candidate in candidates:
         try:
             return statistic_registry.coerce(candidate)
@@ -655,7 +671,7 @@ def _parse_data_frame_table_default(lines: Sequence[bytes]) -> DataFrameFormat:
                 name=canonical_name,
                 raw_name=name,
                 type_name=type_name,
-                statistic=_df_resolve_statistic(canonical_name, name),
+                statistic=_df_resolve_statistic(canonical_name, name, code=stat_code),
                 unit=unit,
                 conditional=conditional,
                 parser=_df_parser_for_type(type_name),

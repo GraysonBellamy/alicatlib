@@ -106,7 +106,7 @@ per-call `timeout=` kwargs (available on every I/O boundary —
 ```python
 from alicatlib import AlicatConfig, open_device
 config = AlicatConfig(default_timeout_s=1.0)
-async with await open_device("/dev/ttyUSB0", timeout=1.0) as dev:
+async with open_device("/dev/ttyUSB0", timeout=1.0) as dev:
     ...
 ```
 
@@ -155,7 +155,8 @@ The device is GP-family or pre-8v28 numeric firmware, so `??M*`
 isn't available. Supply `model_hint`:
 
 ```python
-await open_device("/dev/ttyUSB0", model_hint="MC-100SCCM-D")
+async with open_device("/dev/ttyUSB0", model_hint="MC-100SCCM-D") as dev:
+    ...
 ```
 
 See [devices.md §Escape hatches](devices.md#escape-hatches).
@@ -182,7 +183,7 @@ names the missing `Capability` flag (e.g. `BAROMETER`,
 what the factory probed:
 
 ```python
-async with await open_device(port) as dev:
+async with open_device(port) as dev:
     print(dev.info.capabilities)
     print(dev.info.probe_report)   # per-flag outcomes
 ```
@@ -208,10 +209,10 @@ session raises `AlicatError` with an explanation; re-open with the new
 settings:
 
 ```python
-async with await open_device("/dev/ttyUSB0", unit_id="A") as dev:
+async with open_device("/dev/ttyUSB0", unit_id="A") as dev:
     await dev.change_unit_id("B", confirm=True)
 # old session is broken here — re-open on the new id
-async with await open_device("/dev/ttyUSB0", unit_id="B") as dev:
+async with open_device("/dev/ttyUSB0", unit_id="B") as dev:
     ...
 ```
 

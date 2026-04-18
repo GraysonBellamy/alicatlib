@@ -530,6 +530,28 @@ class TestParseDataFrameTable:
         assert by_name["Abs_Press"].statistic is Statistic.ABS_PRESS
         assert by_name["Volu_Flow"].statistic is Statistic.VOL_FLOW
 
+    def test_statistic_resolved_by_stat_code_when_name_not_aliased(self) -> None:
+        """Regression: the Gas column (stat code 703, wire name ``Gas``) must
+        resolve to :attr:`Statistic.FLUID_NAME`. Pre-fix the name-only lookup
+        missed this because ``Gas`` isn't one of FLUID_NAME's registry aliases
+        (those are ``fluid_name`` / ``Fluid_Name``), so the field landed with
+        ``statistic=None`` and ``frame.get_statistic(FLUID_NAME)`` returned
+        ``None`` for a perfectly well-formed frame.
+        """
+        fmt = parse_data_frame_table(self._lines())
+        by_name = {f.name: f for f in fmt.fields}
+        assert by_name["Gas"].statistic is Statistic.FLUID_NAME
+
+    def test_statistic_resolved_by_code_even_if_name_is_off(self) -> None:
+        """Authoritative code wins over wire name — the V8+ ``??D*`` stat-code
+        column is the source of truth. A device with a slightly different wire
+        label still resolves correctly as long as the code is right.
+        """
+        fmt = parse_data_frame_table(
+            [b"A D01 703 FluidLabel                  string          6"],
+        )
+        assert fmt.fields[0].statistic is Statistic.FLUID_NAME
+
     def test_statistic_none_for_unknown_raw_name(self) -> None:
         """Unknown wire name → statistic=None, not an error."""
         fmt = parse_data_frame_table(

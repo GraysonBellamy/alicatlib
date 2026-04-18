@@ -180,6 +180,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "ANN", "S101", "PLR2004", "PLC0415", "S", "ASYNC109"]
 "scripts/**" = ["D", "T20", "ANN", "S110", "S112", "SIM105", "PLW2901", "ASYNC109", "ASYNC240", "PLR2004", "BLE001"]
+"examples/**" = ["D", "T20", "S101", "PLR2004", "INP001"]
 # Transport methods intentionally expose a ``timeout`` parameter at every I/O
 # boundary (design §5.1). ASYNC109 discourages that in favor of anyio.fail_after
 # *around* the call, but the design goal is to surface per-call bounds through

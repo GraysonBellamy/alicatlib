@@ -194,6 +194,7 @@ async def find_devices(
     baudrates: Sequence[int] = DEFAULT_DISCOVERY_BAUDRATES,
     timeout: float = _DEFAULT_PROBE_TIMEOUT_S,
     max_concurrency: int = _DEFAULT_MAX_CONCURRENCY,
+    stop_on_first_hit: bool = False,
 ) -> tuple[DiscoveryResult, ...]:
     """Probe the cross-product ``ports × unit_ids × baudrates`` concurrently.
 
@@ -202,11 +203,34 @@ async def find_devices(
     but note that a large fleet plus multiple baudrates multiplies out
     quickly (10 ports × 2 baud × 5 unit ids = 100 probes).
 
-    Concurrency is bounded by ``max_concurrency`` via
-    :class:`anyio.CapacityLimiter`; at most that many serial handles
-    are ever open simultaneously. The function never raises — every
-    probe's result lands in the returned tuple, ``ok`` or not, in a
-    stable order (``ports`` × ``unit_ids`` × ``baudrates``, row-major).
+    Concurrency is bounded two ways:
+
+    - ``max_concurrency`` via :class:`anyio.CapacityLimiter` — at most
+      that many serial handles are ever open simultaneously.
+    - A per-port :class:`anyio.Lock` — combinations targeting the same
+      physical port serialise, because a serial port can only be held
+      by one transport at a time. Without this, a sweep that tries two
+      baud rates on one port would see the second probe fail with
+      ``PortBusyError`` (or an unrelated transport error) even when the
+      device is present at the correct baud — the two probes simply
+      raced for the same handle.
+
+    Lock order is port-first, limiter-second: a probe waiting on its
+    port lock does not consume a limiter slot, which keeps the overall
+    concurrency ceiling meaningful.
+
+    When ``stop_on_first_hit`` is ``True``, a successful probe at
+    ``(port, _, baud)`` records ``baud`` as that port's confirmed rate
+    and any pending same-port probe at a different baud is skipped.
+    Same-baud probes at other unit ids still run (important for RS-485
+    multi-drop buses where several devices share a port at a single
+    baud). Skipped combinations are simply omitted from the result
+    tuple, so the caller can expect ``len(result) ≤ len(combinations)``.
+    Default is ``False`` — every combination produces a result, in a
+    stable row-major order (``ports`` × ``unit_ids`` × ``baudrates``).
+
+    The function never raises — every probe's result lands in the
+    returned tuple, ``ok`` or not.
     """
     if ports is None:
         ports = await list_serial_ports()
@@ -215,20 +239,35 @@ async def find_devices(
     combinations = list(product(port_list, unit_ids, baudrates))
     results: list[DiscoveryResult | None] = [None] * len(combinations)
     limiter = anyio.CapacityLimiter(max_concurrency)
+    port_locks: dict[str, anyio.Lock] = {port: anyio.Lock() for port in port_list}
+    # Per-port confirmed baud — populated on first ok result under
+    # ``stop_on_first_hit``. Keyed by port because baud is a bus
+    # property, not a per-device one: if one unit id responded at
+    # 19200, the bus is at 19200 and other bauds are pointless.
+    confirmed_baud: dict[str, int] = {}
 
     async def _run(index: int, port: str, unit_id: str, baudrate: int) -> None:
-        async with limiter:
-            results[index] = await probe(
-                port,
-                unit_id=unit_id,
-                baudrate=baudrate,
-                timeout=timeout,
-            )
+        async with port_locks[port]:
+            if stop_on_first_hit:
+                hit = confirmed_baud.get(port)
+                if hit is not None and hit != baudrate:
+                    return
+            async with limiter:
+                result = await probe(
+                    port,
+                    unit_id=unit_id,
+                    baudrate=baudrate,
+                    timeout=timeout,
+                )
+            results[index] = result
+            if stop_on_first_hit and result.ok:
+                confirmed_baud[port] = baudrate
 
     async with anyio.create_task_group() as tg:
         for index, (port, unit_id, baudrate) in enumerate(combinations):
             tg.start_soon(_run, index, port, unit_id, baudrate)
 
-    # Every slot is populated — the task group only exits after every
-    # spawned task returns — but mypy can't prove that, hence the cast.
+    # ``None`` entries are skipped-by-design under ``stop_on_first_hit``;
+    # otherwise every slot is populated because the task group only
+    # exits after every spawned task returns.
     return tuple(r for r in results if r is not None)

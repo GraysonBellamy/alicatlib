@@ -80,6 +80,7 @@ def find_devices(
     baudrates: Sequence[int] = DEFAULT_DISCOVERY_BAUDRATES,
     timeout: float = 0.2,
     max_concurrency: int = 8,
+    stop_on_first_hit: bool = False,
     portal: SyncPortal | None = None,
 ) -> tuple[DiscoveryResult, ...]:
     """Blocking :func:`alicatlib.devices.discovery.find_devices`."""
@@ -92,6 +93,7 @@ def find_devices(
             baudrates=baudrates,
             timeout=timeout,
             max_concurrency=max_concurrency,
+            stop_on_first_hit=stop_on_first_hit,
         )
     with SyncPortal() as owned:
         return owned.call(
@@ -101,4 +103,5 @@ def find_devices(
             baudrates=baudrates,
             timeout=timeout,
             max_concurrency=max_concurrency,
+            stop_on_first_hit=stop_on_first_hit,
         )

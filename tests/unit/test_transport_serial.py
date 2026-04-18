@@ -283,6 +283,58 @@ class TestErrorMapping:
         assert ei.value.context.port == "/dev/mockA"
         assert ei.value.context.extra.get("phase") == "write"
 
+    @pytest.mark.anyio
+    async def test_open_wraps_os_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Regression: ``OSError`` from the backend must surface as
+        :class:`AlicatConnectionError`.
+
+        Linux enumerates ``/dev/ttyS*`` phantom UARTs that pass the
+        backend's open() but fail ``tcgetattr`` with ``EIO``; the raw
+        error used to bubble through :func:`probe` and crash
+        :func:`find_devices` — which the discovery docstring explicitly
+        promises never raises.
+        """
+
+        async def fake_open(path: str, config: object) -> object:
+            raise OSError(5, "Input/output error")
+
+        monkeypatch.setattr(
+            "alicatlib.transport.serial.open_serial_port",
+            fake_open,
+        )
+        transport = SerialTransport(SerialSettings(port="/dev/ttyS0"))
+        with pytest.raises(AlicatConnectionError) as ei:
+            await transport.open()
+        assert ei.value.context.port == "/dev/ttyS0"
+        assert "Input/output error" in str(ei.value)
+
+    @pytest.mark.anyio
+    async def test_open_wraps_termios_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Regression: ``termios.error`` is a bare :class:`Exception` on
+        CPython (not an :class:`OSError` subclass). The handler lists it
+        explicitly so kernel-enumerated phantom ports stop crashing
+        :func:`find_devices`.
+        """
+        termios = pytest.importorskip("termios")
+
+        async def fake_open(path: str, config: object) -> object:
+            raise termios.error(5, "Input/output error")
+
+        monkeypatch.setattr(
+            "alicatlib.transport.serial.open_serial_port",
+            fake_open,
+        )
+        transport = SerialTransport(SerialSettings(port="/dev/ttyS0"))
+        with pytest.raises(AlicatConnectionError) as ei:
+            await transport.open()
+        assert ei.value.context.port == "/dev/ttyS0"
+
 
 # ---------------------------------------------------------------------------
 # Label — should match the configured port path.
