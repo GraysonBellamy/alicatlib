@@ -527,6 +527,11 @@ class TestFindDevices:
         """Once a probe at ``(port, uid, baud)`` succeeds, probes at
         ``(port, uid, baud')`` for ``baud' != baud`` don't run — the bus
         is already known to be at ``baud``.
+
+        The test is scheduling-agnostic: either baud may be the first to
+        acquire the port lock under anyio's task group (asyncio and trio
+        differ here). The invariant is that *exactly one* probe runs,
+        regardless of which baud wins the race.
         """
         calls: list[tuple[str, str, int]] = []
 
@@ -539,20 +544,12 @@ class TestFindDevices:
         ) -> DiscoveryResult:
             del timeout
             calls.append((port, unit_id, baudrate))
-            if baudrate == 19200:
-                return DiscoveryResult(
-                    port=port,
-                    unit_id=unit_id,
-                    baudrate=baudrate,
-                    info=_fake_info(),
-                    error=None,
-                )
             return DiscoveryResult(
                 port=port,
                 unit_id=unit_id,
                 baudrate=baudrate,
-                info=None,
-                error=AlicatTimeoutError("wrong baud"),
+                info=_fake_info(),
+                error=None,
             )
 
         monkeypatch.setattr(discovery, "probe", fake_probe)
@@ -562,7 +559,10 @@ class TestFindDevices:
             baudrates=(19200, 115200),
             stop_on_first_hit=True,
         )
-        assert calls == [("/dev/ttyUSB0", "A", 19200)]
+        assert len(calls) == 1
+        assert calls[0][0] == "/dev/ttyUSB0"
+        assert calls[0][1] == "A"
+        assert calls[0][2] in (19200, 115200)
         assert len(results) == 1
         assert results[0].ok
 
@@ -572,9 +572,15 @@ class TestFindDevices:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Short-circuit is keyed on baud, not on port-as-a-whole. On an
-        RS-485 bus, ``(port, A, 19200)`` succeeding does not mean
-        ``(port, B, 19200)`` should be skipped — a second device may
+        RS-485 bus, ``(port, A, baud)`` succeeding does not mean
+        ``(port, B, baud)`` should be skipped — a second device may
         share the bus.
+
+        Whichever baud wins the first port-lock acquisition becomes the
+        confirmed baud for that port, then both unit ids are probed at
+        that baud. The test asserts *structure* (one baud for all
+        probes; both unit ids present) rather than *which* baud, since
+        anyio's task group scheduling differs between asyncio and trio.
         """
         calls: list[tuple[str, str, int]] = []
 
@@ -602,11 +608,15 @@ class TestFindDevices:
             baudrates=(19200, 115200),
             stop_on_first_hit=True,
         )
-        # A@19200 hits, B@19200 still probed, B@115200 skipped (wrong baud).
-        # A@115200 is also skipped. Two results remain.
-        hit_bauds = {(c[1], c[2]) for c in calls}
-        assert hit_bauds == {("A", 19200), ("B", 19200)}
         assert len(results) == 2
+        assert len(calls) == 2
+        # Both probes shared the baud that won the first port-lock.
+        bauds_seen = {c[2] for c in calls}
+        assert len(bauds_seen) == 1
+        winning_baud = next(iter(bauds_seen))
+        assert winning_baud in (19200, 115200)
+        # Both unit ids were probed at the winning baud.
+        assert {c[1] for c in calls} == {"A", "B"}
 
     @pytest.mark.anyio
     async def test_stop_on_first_hit_default_false_preserves_full_sweep(
