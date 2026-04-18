@@ -49,9 +49,15 @@ repos:
   # the requested groups (rather than silently re-resolving), so a stale
   # lockfile surfaces as a typecheck failure rather than a hidden drift.
   #
-  # Runs on pre-push, not every commit — these are the slowest hooks here
-  # and CI re-runs them anyway; pre-push is the right granularity for a
-  # last-line-of-defense check that needs the full project venv.
+  # Runs at the default pre-commit stage so type errors block the commit
+  # locally instead of surfacing in CI or on pre-push (where the fix is
+  # already an amend-and-retry). Both mypy and pyright are kept because
+  # they disagree in practice — certain patterns (try/except ImportError
+  # redeclarations, TypedDict narrowing, Protocol subtyping edge cases)
+  # pass one and fail the other, and the CI typecheck job runs both.
+  # ``pass_filenames: false`` means the hook typechecks the whole project
+  # once per commit rather than per-file; mypy's incremental cache and
+  # pyright's watch-mode caches keep warm runs cheap.
   - repo: local
     hooks:
       - id: mypy
@@ -60,7 +66,6 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src|tests)/
-        stages: [pre-push]
 
       - id: pyright
         name: pyright (matches CI typecheck env)
@@ -68,7 +73,6 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src|tests)/
-        stages: [pre-push]
 
       # codes.json → _codes_gen.py must be kept in sync.  The hook re-runs
       # `gen_codes.py --check` whenever codes.json or the generator itself

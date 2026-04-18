@@ -14,16 +14,6 @@ import contextlib
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-try:
-    import termios
-
-    _TermiosError: type[BaseException] = termios.error
-except ImportError:  # pragma: no cover — Windows has no termios module
-
-    class _TermiosError(Exception):  # type: ignore[no-redef]
-        """Placeholder so the ``except`` tuple stays valid on non-POSIX."""
-
-
 import anyio
 from anyserial import (
     FlowControl,
@@ -53,6 +43,26 @@ __all__ = ["SerialTransport"]
 # Per-call read chunk. Bigger is fine — anyserial returns whatever the kernel
 # has ready and never blocks waiting to fill the buffer.
 _RECEIVE_CHUNK: int = 4096
+
+
+def _port_open_error_types() -> tuple[type[BaseException], ...]:
+    """Build the ``except`` tuple used by :meth:`SerialTransport.open`.
+
+    ``termios.error`` is a bare :class:`Exception` on CPython (not an
+    :class:`OSError` subclass), so it has to be listed alongside
+    :class:`OSError` explicitly for phantom ``/dev/ttyS*`` UARTs that
+    fail ``tcgetattr`` with EIO. Computed once at import time through a
+    function so the try/except-ImportError idiom doesn't trip pyright's
+    constant-redefinition check on non-POSIX platforms.
+    """
+    try:
+        import termios  # noqa: PLC0415 — platform-gated optional import
+    except ImportError:  # pragma: no cover — Windows has no termios module
+        return (OSError,)
+    return (OSError, termios.error)
+
+
+_PORT_OPEN_ERRORS: tuple[type[BaseException], ...] = _port_open_error_types()
 
 
 class SerialTransport:
@@ -102,15 +112,15 @@ class SerialTransport:
                 f"backend error opening {self.label}: {exc}",
                 context=ErrorContext(port=self.label),
             ) from exc
-        except (OSError, _TermiosError) as exc:
-            # Lower-level kernel errors (``termios.error``, EIO, EACCES) can
-            # leak past the anyserial typed wrappers — e.g. Linux enumerates
-            # ``/dev/ttyS*`` phantom UARTs that fail ``tcgetattr`` with
-            # EIO. Note: ``termios.error`` is a bare :class:`Exception` on
-            # CPython (not an :class:`OSError` subclass), so it's listed
-            # explicitly. Surface as :class:`AlicatConnectionError` so that
-            # :func:`alicatlib.devices.discovery.probe` (which promises to
-            # never raise) can collect the failure as a :class:`DiscoveryResult`.
+        except _PORT_OPEN_ERRORS as exc:
+            # Lower-level kernel errors (``termios.error``, EIO, EACCES)
+            # can leak past the anyserial typed wrappers — e.g. Linux
+            # enumerates ``/dev/ttyS*`` phantom UARTs that fail
+            # ``tcgetattr`` with EIO. Surface as
+            # :class:`AlicatConnectionError` so
+            # :func:`alicatlib.devices.discovery.probe` (which promises
+            # to never raise) can collect the failure as a
+            # :class:`DiscoveryResult`.
             raise AlicatConnectionError(
                 f"could not open {self.label}: {exc}",
                 context=ErrorContext(port=self.label),
