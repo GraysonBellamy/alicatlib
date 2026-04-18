@@ -44,7 +44,7 @@ __all__ = [
 
 
 # ``LV`` and ``LS`` share the same 9v00 cut-in inside V8_V9 — both
-# were introduced in the same firmware revision. Re-use the shared
+# were introduced in the same firmware revision. Reuse the shared
 # constant from the firmware-cutoffs module rather than duplicate.
 _MIN_FIRMWARE_LV: Final[FirmwareVersion] = MIN_FIRMWARE_SETPOINT_LS
 

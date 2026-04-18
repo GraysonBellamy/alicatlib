@@ -100,6 +100,7 @@ async def _build_client(script: Mapping[bytes, ScriptedReply]) -> AlicatProtocol
 
 
 class TestCanonicalPortKey:
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX realpath behavior only")
     def test_nonexistent_path_returns_original(self) -> None:
         """Unresolvable paths pass through unchanged (fixture case)."""
         assert _canonical_port_key("/dev/ttyDoesNotExist") == "/dev/ttyDoesNotExist"

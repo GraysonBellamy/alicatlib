@@ -37,7 +37,7 @@ repos:
     hooks:
       - id: codespell
         additional_dependencies: [tomli]
-        args: ["--ignore-words-list=aliuse,ags,als,unparseable"]
+        args: ["--ignore-words-list=aliuse,ags,als,bve,doub,unparseable"]
 
   # Local hooks — run type checkers via `uv run` against the same dep
   # groups CI uses, so the local typecheck env is identical to the CI

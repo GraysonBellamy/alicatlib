@@ -17,7 +17,7 @@ of which is a normal request/response command.
 - ``@@ {new_unit_id}`` — stop streaming. Same rationale; bytes produced
   by :func:`encode_stop_stream`. Already used by
   :func:`~alicatlib.devices.factory._recover_from_stream` for the
-  stale-stream recovery path — ``StreamingSession`` re-uses the same
+  stale-stream recovery path — ``StreamingSession`` reuses the same
   wire form for symmetry and co-location.
 
 The start/stop helpers are pure functions on strings; keeping them in
@@ -83,7 +83,7 @@ def encode_stop_stream(new_unit_id: str) -> bytes:
     transition, not a request/response command. Already used by
     :func:`~alicatlib.devices.factory._recover_from_stream` for
     unconditional stale-stream recovery at ``open_device`` time;
-    :class:`~alicatlib.devices.streaming.StreamingSession` re-uses the
+    :class:`~alicatlib.devices.streaming.StreamingSession` reuses the
     same helper on context exit.
     """
     return f"@@ {new_unit_id}\r".encode("ascii")

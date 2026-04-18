@@ -14,7 +14,7 @@ continuously until stopped. This module owns that runtime:
   bounded :mod:`anyio.streams.memory` object stream, parsing each line
   with the session's cached
   :class:`~alicatlib.devices.data_frame.DataFrameFormat`. Overflow is
-  controlled by :class:`OverflowPolicy` (design §5.14 — re-used from
+  controlled by :class:`OverflowPolicy` (design §5.14 — reused from
   the sample recorder so the knob is one concept across acquisition
   surfaces). Parse errors are logged and skipped unless
   ``strict=True``.
