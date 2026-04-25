@@ -10,10 +10,13 @@ Design reference: ``docs/design.md`` §5.17.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Self
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from alicatlib.devices.kind import DeviceKind
     from alicatlib.devices.medium import Medium
     from alicatlib.firmware import FirmwareFamily, FirmwareVersion
@@ -49,8 +52,11 @@ __all__ = [
 ]
 
 
-def _empty_extra() -> dict[str, Any]:
-    return {}
+_EMPTY_EXTRA: Mapping[str, Any] = MappingProxyType({})
+
+
+def _empty_extra() -> Mapping[str, Any]:
+    return _EMPTY_EXTRA
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +65,11 @@ class ErrorContext:
 
     Every field is optional so callers can build a context progressively as a
     command flows through layers (transport → protocol → session → command).
+
+    ``extra`` accepts any ``Mapping`` and is always frozen into a read-only
+    :class:`types.MappingProxyType` at construction. The shared empty
+    sentinel can therefore never be mutated through
+    ``error.context.extra[k] = v``.
     """
 
     command_name: str | None = None
@@ -71,31 +82,34 @@ class ErrorContext:
     device_media: Medium | None = None
     command_media: Medium | None = None
     elapsed_s: float | None = None
-    extra: dict[str, Any] = field(default_factory=_empty_extra)
+    extra: Mapping[str, Any] = field(default_factory=_empty_extra)
+
+    def __post_init__(self) -> None:
+        # Frozen dataclass: route the assignment through ``object.__setattr__``.
+        # Wrapping into ``MappingProxyType`` makes mutation an immediate
+        # ``TypeError`` rather than a silent shared-singleton corruption.
+        if not isinstance(self.extra, MappingProxyType):
+            object.__setattr__(self, "extra", MappingProxyType(dict(self.extra)))
 
     def merged(self, **updates: Any) -> Self:
         """Return a new context with ``updates`` overlaid. Unknown keys go to ``extra``."""
         known: dict[str, Any] = {}
         extra_updates: dict[str, Any] = {}
         for key, value in updates.items():
-            if key in {
-                "command_name",
-                "command_bytes",
-                "raw_response",
-                "unit_id",
-                "port",
-                "firmware",
-                "device_kind",
-                "device_media",
-                "command_media",
-                "elapsed_s",
-            }:
+            if key in _CONTEXT_KNOWN_FIELDS:
                 known[key] = value
             else:
                 extra_updates[key] = value
 
-        new_extra = {**self.extra, **extra_updates} if extra_updates else self.extra
+        new_extra: Mapping[str, Any] = (
+            MappingProxyType({**self.extra, **extra_updates}) if extra_updates else self.extra
+        )
         return replace(self, **known, extra=new_extra)
+
+
+_CONTEXT_KNOWN_FIELDS: frozenset[str] = frozenset(
+    f.name for f in fields(ErrorContext) if f.name != "extra"
+)
 
 
 _EMPTY_CONTEXT = ErrorContext()
@@ -119,14 +133,36 @@ class AlicatError(Exception):
 
         Useful when an inner layer raises and an outer layer wants to enrich
         the context (for instance adding ``port`` or ``elapsed_s``).
+
+        Allocates a fresh instance via ``cls.__new__`` and copies attribute
+        state directly. Avoids re-invoking ``__init__`` — many subclasses
+        (``AlicatMediumMismatchError``, ``AlicatFirmwareError``,
+        ``UnknownGasError`` and friends) have bespoke keyword-only
+        signatures that don't accept ``(message, *, context=)``, and
+        ``copy.copy`` would silently dispatch through them via
+        :meth:`Exception.__reduce__`.
         """
-        new = type(self)(str(self), context=self.context.merged(**updates))
+        cls = type(self)
+        new = cls.__new__(cls)
+        # ``Exception`` slot state lives in ``self.args``; reuse it so
+        # ``str(err)`` keeps the original message.
+        new.args = self.args
+        # Copy subclass-specific attributes (value, field_name, required_min, ...).
+        # Use ``__dict__`` directly when present (most subclasses), and fall back
+        # to slot iteration if a frozen variant ever appears.
+        try:
+            new.__dict__.update(self.__dict__)
+        except AttributeError:  # pragma: no cover — no slotted subclass today
+            for slot in getattr(cls, "__slots__", ()):
+                if hasattr(self, slot):
+                    object.__setattr__(new, slot, getattr(self, slot))
+        new.context = self.context.merged(**updates)
         new.__cause__ = self.__cause__
         new.__context__ = self.__context__
         new.__traceback__ = self.__traceback__
         return new
 
-    def __str__(self) -> str:  # pragma: no cover - trivial
+    def __str__(self) -> str:
         base = super().__str__()
         ctx = self.context
         bits: list[str] = []
@@ -136,8 +172,22 @@ class AlicatError(Exception):
             bits.append(f"unit_id={ctx.unit_id}")
         if ctx.port is not None:
             bits.append(f"port={ctx.port}")
+        if ctx.firmware is not None:
+            bits.append(f"firmware={ctx.firmware}")
+        if ctx.device_kind is not None:
+            bits.append(f"device_kind={ctx.device_kind.name}")
+        if ctx.device_media is not None:
+            bits.append(f"device_media={ctx.device_media.name}")
+        if ctx.command_media is not None:
+            bits.append(f"command_media={ctx.command_media.name}")
         if ctx.elapsed_s is not None:
             bits.append(f"elapsed_s={ctx.elapsed_s:.3f}")
+        if ctx.command_bytes is not None:
+            bits.append(f"command_bytes={ctx.command_bytes!r}")
+        if ctx.raw_response is not None:
+            bits.append(f"raw_response={ctx.raw_response!r}")
+        if ctx.extra:
+            bits.append(f"extra={dict(ctx.extra)!r}")
         return f"{base} [{', '.join(bits)}]" if bits else base
 
 

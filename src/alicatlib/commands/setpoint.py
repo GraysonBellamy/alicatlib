@@ -31,7 +31,12 @@ from alicatlib.commands._firmware_cutoffs import MIN_FIRMWARE_LSS, MIN_FIRMWARE_
 from alicatlib.commands.base import Command, DecodeContext, ResponseMode
 from alicatlib.devices.kind import DeviceKind
 from alicatlib.devices.models import SetpointState
-from alicatlib.errors import AlicatParseError, AlicatValidationError, ErrorContext
+from alicatlib.errors import (
+    AlicatParseError,
+    AlicatValidationError,
+    ErrorContext,
+    UnknownUnitError,
+)
 from alicatlib.firmware import FirmwareFamily, FirmwareVersion
 from alicatlib.protocol.parser import (
     parse_ascii,
@@ -129,7 +134,7 @@ def _decode_setpoint_reply(
     unit: Unit | None
     try:
         unit = unit_registry.coerce(unit_label)
-    except Exception:
+    except UnknownUnitError:
         unit = None
     return SetpointState(
         unit_id=unit_id,

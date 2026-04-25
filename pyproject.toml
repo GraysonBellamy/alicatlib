@@ -163,6 +163,7 @@ select = [
     "LOG",  # flake8-logging
     "G",    # flake8-logging-format
     "A",    # flake8-builtins
+    "BLE",  # flake8-blind-except — bare/blind ``except Exception`` swallows bugs
 ]
 ignore = [
     "D100",    # missing module docstring — tolerated for now on stubs

@@ -21,9 +21,10 @@ Best-practice defaults baked in:
 - **Identifier validation** on ``schema`` and ``table`` (strict regex).
   Every value passes through ``$N`` placeholders — never
   string-formatted into SQL.
-- **Credential scrubbing** — any log line that references the target
-  replaces the password with ``***``. A unit test asserts the plain
-  password never appears in a captured log record.
+- **Credential scrubbing** — log lines describe the target via
+  :meth:`PostgresConfig.target`, which only renders
+  ``host:port/db.schema.table``; the DSN (and any embedded password)
+  is never written to a log record.
 - **``statement_timeout``** applied as a server setting so a wedged
   query cannot block the acquisition loop forever.
 
@@ -43,7 +44,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Self
-from urllib.parse import quote, urlparse, urlunparse
+from urllib.parse import urlparse
+
+import anyio
 
 from alicatlib._logging import get_logger
 from alicatlib.errors import (
@@ -109,28 +112,6 @@ def _column_type(spec: ColumnSpec) -> str:
     return "text"
 
 
-def _scrub_dsn(dsn: str) -> str:  # pyright: ignore[reportUnusedFunction]
-    """Return ``dsn`` with any password field replaced by ``***``.
-
-    Handles URL-form DSNs (``postgres://user:pass@host/db``). DSNs
-    that carry no password pass through unchanged. Malformed input
-    is returned verbatim — scrubbing is best-effort and must not
-    raise from a log-formatting code path.
-    """
-    try:
-        parsed = urlparse(dsn)
-    except ValueError:
-        return dsn
-    if not parsed.password:
-        return dsn
-    userinfo = parsed.username or ""
-    netloc_host = parsed.hostname or ""
-    if parsed.port is not None:
-        netloc_host = f"{netloc_host}:{parsed.port}"
-    netloc = f"{quote(userinfo, safe='')}:***@{netloc_host}" if userinfo else f"***@{netloc_host}"
-    return urlunparse(parsed._replace(netloc=netloc))
-
-
 @dataclass(frozen=True, slots=True)
 class PostgresConfig:
     """Connection + target settings for :class:`PostgresSink`.
@@ -156,6 +137,12 @@ class PostgresConfig:
             server setting. Defaults to 30 s.
         command_timeout_s: asyncpg's per-call command timeout.
             Defaults to 10 s.
+        connect_timeout_s: Cap on initial pool establishment in
+            :meth:`PostgresSink.open`. A misconfigured DSN must not be
+            able to wedge ``open()`` indefinitely — defaults to 30 s.
+        close_timeout_s: Cap on :meth:`PostgresSink.close`'s wait for
+            in-flight queries to drain. Defaults to 10 s; the pool is
+            then forcibly torn down so shutdown can't hang.
         create_table: If ``True``, infer the schema from the first
             batch and run ``CREATE TABLE IF NOT EXISTS``. If
             ``False`` (the safer default), require the table to
@@ -179,6 +166,8 @@ class PostgresConfig:
     pool_max_size: int = 4
     statement_timeout_ms: int = 30_000
     command_timeout_s: float = 10.0
+    connect_timeout_s: float = 30.0
+    close_timeout_s: float = 10.0
     create_table: bool = False
     use_copy: bool = True
 
@@ -210,6 +199,14 @@ class PostgresConfig:
         if self.command_timeout_s <= 0:
             raise ValueError(
                 f"command_timeout_s must be > 0, got {self.command_timeout_s!r}",
+            )
+        if self.connect_timeout_s <= 0:
+            raise ValueError(
+                f"connect_timeout_s must be > 0, got {self.connect_timeout_s!r}",
+            )
+        if self.close_timeout_s <= 0:
+            raise ValueError(
+                f"close_timeout_s must be > 0, got {self.close_timeout_s!r}",
             )
 
     def target(self) -> str:
@@ -284,26 +281,32 @@ class PostgresSink:
             "statement_timeout": str(int(cfg.statement_timeout_ms)),
         }
         try:
-            if cfg.dsn is not None:
-                self._pool = await self._asyncpg.create_pool(
-                    dsn=cfg.dsn,
-                    min_size=cfg.pool_min_size,
-                    max_size=cfg.pool_max_size,
-                    command_timeout=cfg.command_timeout_s,
-                    server_settings=server_settings,
-                )
-            else:
-                self._pool = await self._asyncpg.create_pool(
-                    host=cfg.host,
-                    port=cfg.port,
-                    user=cfg.user,
-                    password=cfg.password,
-                    database=cfg.database,
-                    min_size=cfg.pool_min_size,
-                    max_size=cfg.pool_max_size,
-                    command_timeout=cfg.command_timeout_s,
-                    server_settings=server_settings,
-                )
+            with anyio.fail_after(cfg.connect_timeout_s):
+                if cfg.dsn is not None:
+                    self._pool = await self._asyncpg.create_pool(
+                        dsn=cfg.dsn,
+                        min_size=cfg.pool_min_size,
+                        max_size=cfg.pool_max_size,
+                        command_timeout=cfg.command_timeout_s,
+                        server_settings=server_settings,
+                    )
+                else:
+                    self._pool = await self._asyncpg.create_pool(
+                        host=cfg.host,
+                        port=cfg.port,
+                        user=cfg.user,
+                        password=cfg.password,
+                        database=cfg.database,
+                        min_size=cfg.pool_min_size,
+                        max_size=cfg.pool_max_size,
+                        command_timeout=cfg.command_timeout_s,
+                        server_settings=server_settings,
+                    )
+        except TimeoutError as exc:
+            raise AlicatSinkWriteError(
+                f"PostgresSink: pool open timed out after {cfg.connect_timeout_s}s "
+                f"for {cfg.target()}",
+            ) from exc
         except Exception as exc:
             raise AlicatSinkWriteError(
                 f"PostgresSink: failed to open pool for {cfg.target()}: {exc}",
@@ -405,9 +408,17 @@ class PostgresSink:
         records: Sequence[tuple[object, ...]],
         columns: Sequence[ColumnSpec],
     ) -> None:
-        """Bulk-insert ``records`` using asyncpg's binary COPY path."""
+        """Bulk-insert ``records`` using asyncpg's binary COPY path.
+
+        Wrapped in an explicit transaction so a partial COPY failure
+        rolls back instead of leaving rows committed — matching the
+        ``executemany`` fallback's atomicity guarantee.
+        """
         cfg = self._config
-        async with self._pool.acquire() as conn:
+        async with (
+            self._pool.acquire() as conn,
+            conn.transaction(),
+        ):
             await conn.copy_records_to_table(
                 cfg.table,
                 records=list(records),
@@ -463,19 +474,40 @@ class PostgresSink:
             ) from exc
 
     async def close(self) -> None:
-        """Close the pool. Idempotent."""
+        """Close the pool. Idempotent.
+
+        ``pool.close()`` waits for in-flight queries to drain. Capped
+        at :attr:`PostgresConfig.close_timeout_s` so a wedged query
+        cannot wedge shutdown — on timeout the pool is forcibly
+        terminated via :meth:`Pool.terminate`.
+        """
         if self._pool is None:
             return
         pool = self._pool
         self._pool = None
+        forced = False
         try:
-            await pool.close()
+            try:
+                with anyio.fail_after(self._config.close_timeout_s):
+                    await pool.close()
+            except TimeoutError:
+                # Drain timed out — force-close so shutdown completes.
+                forced = True
+                pool.terminate()
+                _logger.warning(
+                    "sinks.postgres.close_timeout",
+                    extra={
+                        "target": self._config.target(),
+                        "close_timeout_s": self._config.close_timeout_s,
+                    },
+                )
         finally:
             _logger.info(
                 "sinks.postgres.close",
                 extra={
                     "target": self._config.target(),
                     "rows_written": self._rows_written,
+                    "forced": forced,
                 },
             )
         self._asyncpg = None

@@ -35,7 +35,6 @@ from alicatlib.errors import (
     AlicatSinkSchemaError,
 )
 from alicatlib.sinks import PostgresConfig, PostgresSink
-from alicatlib.sinks.postgres import _scrub_dsn  # pyright: ignore[reportPrivateUsage]
 from tests.unit._sink_fixtures import make_sample
 
 
@@ -202,28 +201,6 @@ class TestConfigValidation:
 
 
 class TestCredentialScrubbing:
-    @pytest.mark.parametrize(
-        ("dsn", "should_scrub"),
-        [
-            ("postgres://alice:secret123@db.example.com:5432/prod", True),
-            ("postgresql://bob@db/foo", False),  # no password
-            ("postgres://user:p%40ss@host/db", True),
-            ("not-a-url", False),  # passes through
-        ],
-    )
-    def test_scrub_dsn_preserves_non_password_fields(
-        self,
-        dsn: str,
-        should_scrub: bool,
-    ) -> None:
-        scrubbed = _scrub_dsn(dsn)
-        if should_scrub:
-            assert "***" in scrubbed
-            assert "secret123" not in scrubbed
-            assert "p%40ss" not in scrubbed
-            assert "p@ss" not in scrubbed
-        assert scrubbed.startswith(dsn.split("://", maxsplit=1)[0]) if "://" in dsn else True
-
     def test_target_does_not_leak_password_dsn_form(self) -> None:
         cfg = PostgresConfig(
             dsn="postgres://alice:top-secret@db:5432/prod",

@@ -402,7 +402,7 @@ class AlicatManager:
                 entry = self._devices.pop(name)
                 try:
                     await self._teardown_device(entry)
-                except Exception as err:
+                except Exception as err:  # noqa: BLE001 — best-effort manager teardown: keep going so other devices still close
                     _logger.warning(
                         "manager.close_device_failed",
                         extra={"device_name": name, "error": repr(err)},
@@ -598,7 +598,7 @@ class AlicatManager:
             try:
                 if port_entry.transport.is_open:
                     await port_entry.transport.close()
-            except Exception as err:
+            except Exception as err:  # noqa: BLE001 — best-effort port teardown: must not mask earlier errors
                 _logger.warning(
                     "manager.close_port_failed",
                     extra={"port_key": port_key, "error": repr(err)},

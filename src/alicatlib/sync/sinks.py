@@ -18,7 +18,7 @@ Design reference: ``docs/design.md`` §5.15 and §5.16.
 from __future__ import annotations
 
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Literal, Protocol, Self, runtime_checkable
 
 from alicatlib.sinks import (
     CsvSink,
@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
     from types import TracebackType
-    from typing import Protocol
 
     from alicatlib.sinks.base import SampleSink
     from alicatlib.streaming.sample import Sample
@@ -53,40 +52,39 @@ __all__ = [
 ]
 
 
-if TYPE_CHECKING:
+@runtime_checkable
+class SyncSampleSink(Protocol):
+    """Sync shape of an acquisition sink.
 
-    class SyncSampleSink(Protocol):
-        """Sync shape of an acquisition sink.
+    Mirrors :class:`~alicatlib.sinks.base.SampleSink` — same method
+    names, no ``await``. Every concrete wrapper in this module
+    satisfies this Protocol.
+    """
 
-        Mirrors :class:`~alicatlib.sinks.base.SampleSink` — same method
-        names, no ``await``. Every concrete wrapper in this module
-        satisfies this Protocol.
-        """
+    def open(self) -> None:
+        """Allocate the sink's backing resource."""
+        ...
 
-        def open(self) -> None:
-            """Allocate the sink's backing resource."""
-            ...
+    def write_many(self, samples: Sequence[Sample]) -> None:
+        """Append ``samples`` to the sink."""
+        ...
 
-        def write_many(self, samples: Sequence[Sample]) -> None:
-            """Append ``samples`` to the sink."""
-            ...
+    def close(self) -> None:
+        """Flush and release the backing resource — idempotent."""
+        ...
 
-        def close(self) -> None:
-            """Flush and release the backing resource — idempotent."""
-            ...
+    def __enter__(self) -> Self:
+        """Open the sink and return self."""
+        ...
 
-        def __enter__(self) -> Self:
-            """Open the sink and return self."""
-            ...
-
-        def __exit__(
-            self,
-            exc_type: type[BaseException] | None,
-            exc: BaseException | None,
-            tb: TracebackType | None,
-        ) -> None:
-            """Close the sink on exit."""
-            ...
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        """Close the sink on exit."""
+        ...
 
 
 # Sqlite / Parquet literal aliases mirror the per-file definitions in the

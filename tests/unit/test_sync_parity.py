@@ -528,3 +528,12 @@ def test_manager_coroutine_coverage() -> None:
     assert not missing, (
         f"AlicatManager has coroutine methods without sync wrappers: {sorted(missing)}"
     )
+
+
+def test_sync_sample_sink_protocol_is_importable_at_runtime() -> None:
+    """Regression: ``SyncSampleSink`` is in ``__all__`` so it must be a real
+    runtime symbol, not a ``TYPE_CHECKING``-only one.
+    """
+    from alicatlib.sync.sinks import SyncSampleSink
+
+    assert isinstance(SyncCsvSink("/tmp/_unused.csv"), SyncSampleSink)

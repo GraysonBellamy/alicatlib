@@ -23,7 +23,6 @@ from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from alicatlib.sinks.base import pipe as async_pipe
 from alicatlib.streaming.recorder import (
     AcquisitionSummary,
     OverflowPolicy,
@@ -154,6 +153,12 @@ def pipe(
     Time thresholds use :func:`time.monotonic` (wall-clock-ish,
     independent of the portal's event loop) because the sink cares
     about persistence freshness, not scheduling precision.
+
+    The returned :class:`AcquisitionSummary` carries ``samples_emitted``
+    (count actually handed to the sink); the ``samples_late`` and
+    ``max_drift_ms`` fields stay at zero — those are recorder-layer
+    concepts and the recorder logs its own values via the
+    ``alicatlib.streaming`` logger on CM exit.
     """
     if batch_size < 1:
         raise ValueError(f"batch_size must be >= 1, got {batch_size!r}")
@@ -204,9 +209,3 @@ def pipe(
         samples_late=0,
         max_drift_ms=0.0,
     )
-
-
-# Keep a reference so :func:`pipe`'s docstring referring to the async
-# driver resolves in sphinx without pulling in a second import at call
-# time.
-_ = async_pipe
