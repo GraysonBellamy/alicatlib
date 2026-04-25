@@ -11,7 +11,7 @@ from alicatlib.errors import AlicatTimeoutError
 from alicatlib.sync import SyncPortal, run_sync
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator, AsyncIterator
 
 
 class TestLifecycle:
@@ -114,7 +114,7 @@ class TestWrapAsyncContextManager:
         from contextlib import asynccontextmanager
 
         @asynccontextmanager
-        async def acm() -> AsyncIterator[str]:
+        async def acm() -> AsyncGenerator[str]:
             events.append("enter")
             try:
                 yield "inside"

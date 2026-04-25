@@ -47,7 +47,7 @@ _ANALOG_OUTPUT_PRIMARY = _AnalogOutputChannel.PRIMARY
 _TOTALIZER_FIRST = _TotalizerId.FIRST
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Generator, Mapping, Sequence
     from types import TracebackType
 
     from alicatlib.commands import Command, GasState
@@ -634,7 +634,7 @@ class Alicat:
         assume_capabilities: Capability = Capability.NONE,
         assume_media: Medium | None = None,
         portal: SyncPortal | None = None,
-    ) -> Iterator[SyncDevice]:
+    ) -> Generator[SyncDevice]:
         """Open a sync :class:`SyncDevice` scoped to a ``with`` block.
 
         Mirrors :func:`alicatlib.devices.factory.open_device` parameter

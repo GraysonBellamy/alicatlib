@@ -53,7 +53,7 @@ from alicatlib._logging import get_logger
 from alicatlib.streaming.sample import Sample
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Sequence
+    from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 
     from anyio.streams.memory import MemoryObjectSendStream
 
@@ -153,7 +153,7 @@ async def record(
     names: Sequence[str] | None = None,
     overflow: OverflowPolicy = OverflowPolicy.BLOCK,
     buffer_size: int = 64,
-) -> AsyncIterator[AsyncIterator[Mapping[str, Sample]]]:
+) -> AsyncGenerator[AsyncIterator[Mapping[str, Sample]]]:
     """Record polled samples into a receive stream at an absolute cadence.
 
     Usage::

@@ -37,7 +37,7 @@ from alicatlib.sync.portal import SyncAsyncIterator, SyncPortal
 from alicatlib.sync.sinks import SyncSinkAdapter
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Generator, Iterator, Mapping, Sequence
 
     from alicatlib.sinks.base import SampleSink
     from alicatlib.streaming.sample import Sample
@@ -103,7 +103,7 @@ def record(
     overflow: OverflowPolicy = OverflowPolicy.BLOCK,
     buffer_size: int = 64,
     portal: SyncPortal | None = None,
-) -> Iterator[Iterator[Mapping[str, Sample]]]:
+) -> Generator[Iterator[Mapping[str, Sample]]]:
     """Sync :func:`alicatlib.streaming.record`.
 
     The yielded iterator is a blocking bridge to the recorder's

@@ -82,7 +82,7 @@ from alicatlib.transport.base import SerialSettings
 from alicatlib.transport.serial import SerialTransport
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Mapping
+    from collections.abc import AsyncGenerator, Mapping
 
     from alicatlib.devices.data_frame import DataFrameField, DataFrameFormat
     from alicatlib.devices.models import FullScaleValue
@@ -995,7 +995,7 @@ async def open_device(
     model_hint: str | None = None,
     assume_capabilities: Capability = Capability.NONE,
     assume_media: Medium | None = None,
-) -> AsyncIterator[Device]:
+) -> AsyncGenerator[Device]:
     """Open a fully-identified :class:`Device` for ``async with`` use.
 
     The caller's ``port`` determines the lifecycle the context manager
