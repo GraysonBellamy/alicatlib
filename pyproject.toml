@@ -40,7 +40,7 @@ dependencies = [
 
 [project.optional-dependencies]
 postgres = ["asyncpg>=0.30"]
-parquet = ["pyarrow>=16"]
+parquet = ["pyarrow>=24.0.0"]
 docs = [
     "zensical>=0.0.33",
     "mkdocstrings-python>=1.12",
