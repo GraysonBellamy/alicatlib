@@ -42,7 +42,7 @@ dependencies = [
 postgres = ["asyncpg>=0.30"]
 parquet = ["pyarrow>=24.0.0"]
 docs = [
-    "zensical>=0.0.33",
+    "zensical>=0.0.36",
     "mkdocstrings-python>=1.12",
 ]
 
@@ -92,14 +92,14 @@ dev = [
     { include-group = "type" },
     { include-group = "test" },
     { include-group = "docs" },
-    "pre-commit>=4.0",
+    "pre-commit>=4.6.0",
 ]
 lint = [
-    "ruff>=0.15.11",
+    "ruff>=0.15.12",
 ]
 type = [
-    "mypy>=1.20",
-    "pyright>=1.1.390",
+    "mypy>=1.20.2",
+    "pyright>=1.1.409",
 ]
 test = [
     "pytest>=8.3",
@@ -108,14 +108,14 @@ test = [
     # tasks that break cancel scopes / task groups). See AnyIO testing docs.
     "pytest-cov>=6.0",
     "coverage[toml]>=7.13.5",
-    "hypothesis>=6.112",
+    "hypothesis>=6.152.2",
     "trio>=0.27",       # used as a secondary AnyIO backend in cross-backend tests
     "uvloop>=0.22.1; platform_system == 'Linux' or platform_system == 'Darwin'",
     "pyyaml>=6.0",      # consumed by tests/unit/test_device_matrix.py to load
                         # the empirical device-behavior fixture
 ]
 docs = [
-    "zensical>=0.0.33",
+    "zensical>=0.0.36",
     "mkdocstrings-python>=1.12",
 ]
 
