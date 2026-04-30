@@ -83,7 +83,7 @@ async def test_identify_and_poll_1000(
     started = time.perf_counter()
     frames_read = 0
 
-    async with open_device(
+    async with await open_device(
         hardware_port,
         unit_id=hardware_unit_id,
         model_hint=hardware_model_hint,

@@ -36,7 +36,6 @@ Design reference: ``docs/design.md`` §5.9, §5.20.
 from __future__ import annotations
 
 import dataclasses
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
@@ -82,7 +81,7 @@ from alicatlib.transport.base import SerialSettings
 from alicatlib.transport.serial import SerialTransport
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Mapping
+    from collections.abc import Mapping
 
     from alicatlib.devices.data_frame import DataFrameField, DataFrameFormat
     from alicatlib.devices.models import FullScaleValue
@@ -984,7 +983,6 @@ def _bootstrap_session(
 # ---------------------------------------------------------------------------
 
 
-@asynccontextmanager
 async def open_device(
     port: str | Transport | AlicatProtocolClient,
     *,
@@ -995,22 +993,35 @@ async def open_device(
     model_hint: str | None = None,
     assume_capabilities: Capability = Capability.NONE,
     assume_media: Medium | None = None,
-) -> AsyncGenerator[Device]:
-    """Open a fully-identified :class:`Device` for ``async with`` use.
+) -> Device:
+    """Open and return a fully-identified :class:`Device`.
 
-    The caller's ``port`` determines the lifecycle the context manager
-    takes ownership of:
+    Usage forms::
+
+        async with await open_device("/dev/ttyUSB0") as device:
+            ...
+
+        device = await open_device("/dev/ttyUSB0")
+        try:
+            ...
+        finally:
+            await device.close()
+
+    The caller's ``port`` determines the lifecycle the device takes
+    ownership of:
 
     - ``str`` (``"/dev/ttyUSB0"`` etc.) — build a
       :class:`SerialTransport` from ``serial`` (or defaults), open it,
-      wrap in an :class:`AlicatProtocolClient`, close both on exit.
+      wrap in an :class:`AlicatProtocolClient`. The device closes both
+      on :meth:`Device.close`.
     - :class:`Transport` — wrap in a new
       :class:`AlicatProtocolClient`; the transport's open/close is the
       caller's responsibility (we never close a transport we didn't
       open).
     - :class:`AlicatProtocolClient` — use as-is; neither transport nor
-      client is closed on exit. Stream recovery is skipped because the
-      factory doesn't have access to the underlying transport.
+      client is closed by the device. Stream recovery is skipped
+      because the factory doesn't have access to the underlying
+      transport.
 
     The ``assume_capabilities`` override is union'd onto the probed set
     per design §5.9 — the factory never *subtracts* flags, because
@@ -1030,7 +1041,6 @@ async def open_device(
     open time.
     """
     owns_transport = False
-    owns_client = False
     transport: Transport | None = None
 
     if isinstance(port, AlicatProtocolClient):
@@ -1040,12 +1050,10 @@ async def open_device(
         transport = SerialTransport(settings)
         client = AlicatProtocolClient(transport, default_timeout=timeout)
         owns_transport = True
-        owns_client = True
     else:
         # Duck-typed Transport (Protocol isn't runtime-checkable).
         transport = port
         client = AlicatProtocolClient(transport, default_timeout=timeout)
-        owns_client = True
 
     try:
         if transport is not None and not transport.is_open:
@@ -1107,16 +1115,18 @@ async def open_device(
         await _prefetch_loop_control_variable(session, info)
 
         device_cls = device_class_for(info)
-        device = device_cls(session)
-
-        try:
-            yield device
-        finally:
-            await device.close()
-    finally:
-        del owns_client  # not load-bearing — we never open client separately
+        device = device_cls(
+            session,
+            owned_transport=transport if owns_transport else None,
+        )
+    except BaseException:
+        # Open failed mid-pipeline; drop any transport we opened so the
+        # caller isn't left with a leaked file descriptor.
         if owns_transport and transport is not None and transport.is_open:
             await transport.close()
+        raise
+
+    return device
 
 
 async def _probe_data_frame_format(

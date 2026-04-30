@@ -141,7 +141,7 @@ class TestManagerLifecycle:
     async def test_add_pre_built_device(self) -> None:
         """A user-built :class:`Device` goes in without lifecycle ownership."""
         client = await _build_client(_happy_script())
-        async with open_device(client) as dev:
+        async with await open_device(client) as dev:
             async with AlicatManager() as mgr:
                 got = await mgr.add("fuel", dev)
                 assert got is dev

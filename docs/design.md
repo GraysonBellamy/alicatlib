@@ -777,7 +777,7 @@ async def open_device(
 Common usage:
 
 ```python
-async with open_device("/dev/ttyUSB0") as dev:
+async with await open_device("/dev/ttyUSB0") as dev:
     frame = await dev.poll()
 ```
 
@@ -1352,7 +1352,7 @@ and `pydantic-settings`.
 ### Polling
 
 ```python
-async with open_device("/dev/ttyUSB0") as dev:
+async with await open_device("/dev/ttyUSB0") as dev:
     frame = await dev.poll()
     mass = frame.get_statistic(Statistic.MASS_FLOW)
 ```

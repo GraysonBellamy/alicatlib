@@ -20,7 +20,7 @@ from alicatlib.transport import SerialSettings
 async def main() -> None:
     port = os.environ.get("PORT", "/dev/ttyUSB0")
     baud = int(os.environ.get("BAUD", "19200"))
-    async with open_device(port, serial=SerialSettings(port=port, baudrate=baud)) as dev:
+    async with await open_device(port, serial=SerialSettings(port=port, baudrate=baud)) as dev:
         frame = await dev.poll()
 
         print(f"device:      {dev.info.model} (firmware {dev.info.firmware})")

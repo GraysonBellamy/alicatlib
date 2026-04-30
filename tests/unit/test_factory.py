@@ -639,7 +639,7 @@ class TestOpenDeviceWithTransport:
     @pytest.mark.anyio
     async def test_happy_path_yields_flow_controller(self) -> None:
         fake = FakeTransport(_happy_script())
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             assert isinstance(dev, FlowController)
             assert dev.info.model == "MC-100SCCM-D"
             assert dev.info.kind is DeviceKind.FLOW_CONTROLLER
@@ -648,7 +648,7 @@ class TestOpenDeviceWithTransport:
     @pytest.mark.anyio
     async def test_poll_works_end_to_end(self) -> None:
         fake = FakeTransport(_happy_script())
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             frame = await dev.poll()
             assert frame.unit_id == "A"
             assert frame.values["Mass_Flow"] == approx(25.5)
@@ -656,7 +656,7 @@ class TestOpenDeviceWithTransport:
     @pytest.mark.anyio
     async def test_gas_method_round_trips(self) -> None:
         fake = FakeTransport(_happy_script())
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             assert isinstance(dev, FlowMeter)  # FlowController is-a FlowMeter
             state = await dev.gas(Gas.N2)
             assert state.gas is Gas.N2
@@ -665,7 +665,7 @@ class TestOpenDeviceWithTransport:
     async def test_caller_owned_transport_stays_open(self) -> None:
         """Factory must not close a transport it didn't open."""
         fake = FakeTransport(_happy_script())
-        async with open_device(fake):
+        async with await open_device(fake):
             pass
         assert fake.is_open is True
 
@@ -683,7 +683,7 @@ class TestOpenDeviceWithTransport:
                 b"A??D*\r": _df_lines(),
             },
         )
-        async with open_device(fake, model_hint="M-100SCCM-D") as dev:
+        async with await open_device(fake, model_hint="M-100SCCM-D") as dev:
             assert isinstance(dev, FlowMeter)
             assert not isinstance(dev, FlowController)
             assert dev.info.firmware.family is FirmwareFamily.GP
@@ -693,7 +693,7 @@ class TestOpenDeviceWithTransport:
     async def test_assume_capabilities_unions(self) -> None:
         """User-supplied capabilities union onto the (empty) probed set."""
         fake = FakeTransport(_happy_script())
-        async with open_device(
+        async with await open_device(
             fake,
             assume_capabilities=Capability.BAROMETER | Capability.MULTI_VALVE,
         ) as dev:
@@ -714,7 +714,7 @@ class TestOpenDeviceWithTransport:
         # medium is Medium.GAS. Passing ``assume_media=Medium.LIQUID``
         # must replace that (not union): the resolved media should be
         # LIQUID alone, not GAS | LIQUID.
-        async with open_device(fake, assume_media=Medium.LIQUID) as dev:
+        async with await open_device(fake, assume_media=Medium.LIQUID) as dev:
             assert dev.info.media is Medium.LIQUID
             # Gas bit must not be set — `&` is non-empty only if intersecting.
             assert not (dev.info.media & Medium.GAS)
@@ -723,7 +723,7 @@ class TestOpenDeviceWithTransport:
     async def test_assume_media_none_preserves_prefix_default(self) -> None:
         """Omitting ``assume_media`` keeps the prefix-derived value."""
         fake = FakeTransport(_happy_script())
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             # MC-* → Medium.GAS per MODEL_RULES.
             assert dev.info.media is Medium.GAS
 
@@ -732,7 +732,7 @@ class TestOpenDeviceWithClient:
     @pytest.mark.anyio
     async def test_caller_owned_client_stays_usable(self) -> None:
         client, fake = await _make_client(_happy_script())
-        async with open_device(client) as dev:
+        async with await open_device(client) as dev:
             assert isinstance(dev, FlowController)
         assert fake.is_open is True
 
@@ -753,7 +753,7 @@ class TestOpenDeviceStreamRecovery:
         # it raw (no reply expected; the factory just drains after).
         fake.add_script(b"@@ A\r", b"")
 
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             assert dev.info.model == "MC-100SCCM-D"
 
         # First write must be the stop-stream bytes — recovery happened
@@ -770,7 +770,7 @@ class TestOpenDeviceStreamRecovery:
         at ~10 ms. Asserts the stop-stream precedes ``VE``.
         """
         fake = FakeTransport(_happy_script())
-        async with open_device(fake):
+        async with await open_device(fake):
             pass
         # Writes begin with the unconditional stop-stream, then VE.
         assert fake.writes[0] == b"@@ A\r"
@@ -793,7 +793,7 @@ class TestOpenDeviceStreamRecovery:
         fake.feed(b"garbage nonfirmware output\r")
 
         with pytest.raises(AlicatError):
-            async with open_device(fake, recover_from_stream=False):
+            async with await open_device(fake, recover_from_stream=False):
                 pass
         assert b"@@ A\r" not in fake.writes
 
@@ -802,7 +802,7 @@ class TestOpenDeviceLifecycle:
     @pytest.mark.anyio
     async def test_device_close_fires_on_context_exit(self) -> None:
         fake = FakeTransport(_happy_script())
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             assert not dev.session.closed
         assert dev.session.closed
 
@@ -837,7 +837,7 @@ class TestOpenDeviceFullScaleProbe:
     @pytest.mark.anyio
     async def test_full_scale_populated_for_every_numeric_field(self) -> None:
         fake = FakeTransport(_happy_script())
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             # Three numeric fields in _df_lines(): stat codes 2, 5, 37.
             # Every one should have a FullScaleValue entry.
             full_scale = dev.info.full_scale
@@ -863,7 +863,7 @@ class TestOpenDeviceFullScaleProbe:
                 b"ALV\r": b"A 37\r",
             },
         )
-        async with open_device(fake, model_hint="MC-100SCCM-D") as dev:
+        async with await open_device(fake, model_hint="MC-100SCCM-D") as dev:
             assert dev.info.firmware.family is FirmwareFamily.GP
             assert dict(dev.info.full_scale) == {}
 
@@ -878,7 +878,7 @@ class TestOpenDeviceFullScaleProbe:
         # Replace the abs-press FPF with the absent-statistic sentinel.
         script[b"AFPF 2\r"] = b"A 0 1 ---\r"
         fake = FakeTransport(script)
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             from alicatlib.registry._codes_gen import STATISTIC_BY_CODE
 
             assert STATISTIC_BY_CODE[2] not in dev.info.full_scale
@@ -895,7 +895,7 @@ class TestOpenDeviceFullScaleProbe:
         fake = FakeTransport(script)
         # Reduce client timeout so the test doesn't wait the full
         # default ``open_device`` budget.
-        async with open_device(fake, timeout=0.02) as dev:
+        async with await open_device(fake, timeout=0.02) as dev:
             from alicatlib.registry._codes_gen import STATISTIC_BY_CODE
 
             assert STATISTIC_BY_CODE[5] not in dev.info.full_scale
@@ -915,7 +915,7 @@ class TestOpenDeviceDcuUnitBinding:
         script[b"ADCU 5\r"] = b"A 12 SCCM\r"
         script[b"ADCU 37\r"] = b"A 12 SCCM\r"
         fake = FakeTransport(script)
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             fmt = dev.session.data_frame_format
             assert fmt is not None
             fields_by_name = {f.name: f for f in fmt.fields}
@@ -927,7 +927,7 @@ class TestOpenDeviceDcuUnitBinding:
     async def test_dcu_probe_not_issued_when_df_already_bound_unit(self) -> None:
         """``??D*`` provided resolvable units; DCU probe should not fire."""
         fake = FakeTransport(_happy_script())
-        async with open_device(fake):
+        async with await open_device(fake):
             pass
         dcu_writes = [w for w in fake.writes if w.startswith(b"ADCU ")]
         assert dcu_writes == []
@@ -939,7 +939,7 @@ class TestOpenDeviceDcuUnitBinding:
         script[b"A??D*\r"] = _df_lines_no_units()
         # No DCU entries — every probe times out.
         fake = FakeTransport(script)
-        async with open_device(fake, timeout=0.02) as dev:
+        async with await open_device(fake, timeout=0.02) as dev:
             fmt = dev.session.data_frame_format
             assert fmt is not None
             # Fields remain unresolved, but the device opened cleanly.
@@ -954,7 +954,7 @@ class TestOpenDeviceLoopControlPrefetch:
     @pytest.mark.anyio
     async def test_controller_lv_cached_at_open(self) -> None:
         fake = FakeTransport(_happy_script())
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             from alicatlib.registry import LoopControlVariable
 
             assert dev.session.loop_control_variable is LoopControlVariable.MASS_FLOW_SETPT
@@ -965,7 +965,7 @@ class TestOpenDeviceLoopControlPrefetch:
         script = _happy_script(model="M-100SCCM-D")
         script[b"A??M*\r"] = _mfg_lines(model="M-100SCCM-D")
         fake = FakeTransport(script)
-        async with open_device(fake) as dev:
+        async with await open_device(fake) as dev:
             assert isinstance(dev, FlowMeter)
             assert not isinstance(dev, FlowController)
             assert dev.session.loop_control_variable is None
@@ -977,5 +977,5 @@ class TestOpenDeviceLoopControlPrefetch:
         script = _happy_script()
         del script[b"ALV\r"]  # force a timeout on the LV probe
         fake = FakeTransport(script)
-        async with open_device(fake, timeout=0.02) as dev:
+        async with await open_device(fake, timeout=0.02) as dev:
             assert dev.session.loop_control_variable is None

@@ -123,6 +123,7 @@ if TYPE_CHECKING:
     from alicatlib.devices.session import Session
     from alicatlib.devices.streaming import OverflowPolicy, StreamingSession
     from alicatlib.registry import Gas, Statistic, Unit
+    from alicatlib.transport import Transport
 
 __all__ = ["Device"]
 
@@ -150,13 +151,20 @@ class Device:
     subclass based on the :class:`DeviceInfo.model` prefix via the
     ``MODEL_RULES`` dispatch table — see design §5.9).
 
-    The device does not own the transport's lifecycle; the context manager
-    returned by ``open_device`` does. Entering the device as a context
-    manager is a no-op for nesting convenience.
+    The device's :meth:`close` releases the session and (when set) the
+    factory-owned transport. :func:`open_device` passes that transport
+    when it built one from a port string; callers that pass a pre-built
+    transport or client retain ownership.
     """
 
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        owned_transport: Transport | None = None,
+    ) -> None:
         self._session = session
+        self._owned_transport = owned_transport
 
     # --------------------------------------------------------------- identity
 
@@ -910,15 +918,19 @@ class Device:
     # --------------------------------------------------------------- lifecycle
 
     async def close(self) -> None:
-        """Release the session — idempotent.
+        """Release the session and (when owned) the transport — idempotent.
 
-        The underlying transport is owned by the async context manager
-        returned from :func:`open_device`; closing the device only marks
-        the session as closed. Users should prefer
-        ``async with open_device(...) as dev:`` over calling ``close()``
-        by hand.
+        :func:`open_device` records ``_owned_transport`` when it built the
+        transport from a port string. Callers that pass a pre-built
+        transport or client retain ownership; in that case ``close()``
+        only releases the session.
         """
         await self._session.close()
+        if self._owned_transport is not None:
+            owned = self._owned_transport
+            self._owned_transport = None
+            if owned.is_open:
+                await owned.close()
 
     async def __aenter__(self) -> Device:
         """Support ``async with device: ...`` nesting — returns ``self``."""

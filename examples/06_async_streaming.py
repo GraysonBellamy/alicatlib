@@ -32,7 +32,7 @@ async def main() -> None:
     rate_ms_env = os.environ.get("RATE_MS")
     rate_ms = int(rate_ms_env) if rate_ms_env else None
 
-    async with open_device(port, serial=SerialSettings(port=port, baudrate=baud)) as dev:
+    async with await open_device(port, serial=SerialSettings(port=port, baudrate=baud)) as dev:
         print("run 1: full-speed consumer, default overflow (DROP_OLDEST)")
         frames: list[float] = []
         async with dev.stream(rate_ms=rate_ms) as stream:

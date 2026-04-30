@@ -312,11 +312,6 @@ devices:
       gg:            supported
       fpf:           supported
       dcu:           rejected
-      ls:            fallback
-      lss:           fallback
-      lv:            fallback
-      t:             supported
-      tp:            supported
       pc:            rejected       # despite FPF 15 returning plausible barometer reading — MATCHES 8v17 MCR pattern
       rename:        supported       # `A@ B` round-trip verified via change_unit_id test
       lcdb:          fallback

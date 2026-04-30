@@ -38,7 +38,7 @@ import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import anyio
 
@@ -56,7 +56,6 @@ from alicatlib.transport.serial import SerialTransport
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Mapping, Sequence
-    from contextlib import AbstractAsyncContextManager
     from types import TracebackType
     from typing import Self
 
@@ -167,15 +166,16 @@ class _PortEntry:
 
 @dataclass(slots=True)
 class _DeviceEntry:
-    """One managed :class:`Device` + its lifecycle reference."""
+    """One managed :class:`Device` + its lifecycle ownership flag."""
 
     name: str
     device: Device
     port_key: str | None
-    # The ``open_device(...)`` context manager we're holding open for
-    # this device. ``None`` when the caller handed us a pre-built
-    # :class:`Device` and explicitly kept lifecycle ownership.
-    device_ctx: AbstractAsyncContextManager[Device] | None
+    # ``True`` when the manager opened the device itself and is
+    # responsible for ``await device.close()`` on teardown. ``False``
+    # when the caller handed us a pre-built :class:`Device` and kept
+    # lifecycle ownership.
+    owns_device: bool
 
 
 # ---------------------------------------------------------------------------
@@ -313,18 +313,18 @@ class AlicatManager:
                     context=ErrorContext(extra={"name": name}),
                 )
 
-            port_key, port_entry, device_ctx = await self._resolve_source(
+            port_key, port_entry, owns_device = await self._resolve_source(
                 source,
-                unit_id=unit_id,
                 serial=serial,
                 timeout=timeout,
             )
 
-            # ``open_device`` context-enter runs identification + probes.
-            # If it raises, we must not leave the port's ref count dangling.
+            # ``open_device`` runs identification + probes. If it raises,
+            # we must not leave the port's ref count dangling.
             try:
-                if device_ctx is not None:
-                    device = await device_ctx.__aenter__()
+                if owns_device:
+                    assert port_entry is not None  # noqa: S101 — narrow for mypy
+                    device = await open_device(port_entry.client, unit_id=unit_id, timeout=timeout)
                 else:
                     # ``source`` was a pre-built Device.
                     assert isinstance(source, Device)  # noqa: S101 — narrow for mypy
@@ -340,7 +340,7 @@ class AlicatManager:
                 name=name,
                 device=device,
                 port_key=port_key,
-                device_ctx=device_ctx,
+                owns_device=owns_device,
             )
             if port_entry is not None:
                 port_entry.refs.add(name)
@@ -505,26 +505,26 @@ class AlicatManager:
         self,
         source: Device | str | Transport | AlicatProtocolClient,
         *,
-        unit_id: str,
         serial: SerialSettings | None,
         timeout: float,
-    ) -> tuple[
-        str | None,
-        _PortEntry | None,
-        AbstractAsyncContextManager[Device] | None,
-    ]:
-        """Map ``source`` to ``(port_key, port_entry, device_ctx)``.
+    ) -> tuple[str | None, _PortEntry | None, bool]:
+        """Map ``source`` to ``(port_key, port_entry, owns_device)``.
 
-        - Pre-built :class:`Device`: everything is ``None`` — manager
+        ``owns_device`` is ``True`` when the manager will call
+        :func:`open_device` itself for this entry and is therefore
+        responsible for :meth:`Device.close` on teardown.
+
+        - Pre-built :class:`Device`: ``(None, None, False)`` — manager
           holds no lifecycle resources.
         - ``str``: canonicalise the path and share or create a
-          :class:`_PortEntry`.
-        - :class:`Transport`: key by ``id``; no sharing.
+          :class:`_PortEntry`; manager opens the device.
+        - :class:`Transport`: key by ``id``; no sharing; manager opens
+          the device, transport stays caller-owned.
         - :class:`AlicatProtocolClient`: key by ``id``; no sharing;
-          transport stays the caller's responsibility.
+          manager opens the device, client stays caller-owned.
         """
         if isinstance(source, Device):
-            return None, None, None
+            return None, None, False
         if isinstance(source, str):
             port_key = _canonical_port_key(source)
             port_entry = self._ports.get(port_key)
@@ -540,11 +540,7 @@ class AlicatManager:
                     owns_transport=True,
                 )
                 self._ports[port_key] = port_entry
-            device_ctx = cast(
-                "AbstractAsyncContextManager[Device]",
-                open_device(port_entry.client, unit_id=unit_id, timeout=timeout),
-            )
-            return port_key, port_entry, device_ctx
+            return port_key, port_entry, True
         if isinstance(source, AlicatProtocolClient):
             port_key = f"client:{id(source)}"
             port_entry = self._ports.get(port_key)
@@ -556,11 +552,7 @@ class AlicatManager:
                     owns_transport=False,
                 )
                 self._ports[port_key] = port_entry
-            device_ctx = cast(
-                "AbstractAsyncContextManager[Device]",
-                open_device(port_entry.client, unit_id=unit_id, timeout=timeout),
-            )
-            return port_key, port_entry, device_ctx
+            return port_key, port_entry, True
         # Duck-typed Transport (Protocol isn't runtime-checkable).
         port_key = f"transport:{id(source)}"
         port_entry = self._ports.get(port_key)
@@ -573,16 +565,12 @@ class AlicatManager:
                 owns_transport=False,
             )
             self._ports[port_key] = port_entry
-        device_ctx = cast(
-            "AbstractAsyncContextManager[Device]",
-            open_device(port_entry.client, unit_id=unit_id, timeout=timeout),
-        )
-        return port_key, port_entry, device_ctx
+        return port_key, port_entry, True
 
     async def _teardown_device(self, entry: _DeviceEntry) -> None:
-        """Exit ``open_device`` for one device and maybe tear down its port."""
-        if entry.device_ctx is not None:
-            await entry.device_ctx.__aexit__(None, None, None)
+        """Close the device (if manager-owned) and maybe tear down its port."""
+        if entry.owns_device:
+            await entry.device.close()
         if entry.port_key is None:
             return
         port_entry = self._ports.get(entry.port_key)

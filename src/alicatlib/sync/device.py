@@ -651,7 +651,8 @@ class Alicat:
         """
         with ExitStack() as stack:
             active_portal = portal if portal is not None else stack.enter_context(SyncPortal())
-            async_cm = open_device(
+            async_device = active_portal.call(
+                open_device,
                 port,
                 unit_id=unit_id,
                 serial=serial,
@@ -661,5 +662,5 @@ class Alicat:
                 assume_capabilities=assume_capabilities,
                 assume_media=assume_media,
             )
-            async_device = stack.enter_context(active_portal.wrap_async_context_manager(async_cm))
+            stack.callback(active_portal.call, async_device.close)
             yield wrap_device(async_device, active_portal)

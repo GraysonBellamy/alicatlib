@@ -166,7 +166,7 @@ async def hardware_device(
     """
     from alicatlib.devices.factory import open_device
 
-    async with open_device(
+    async with await open_device(
         hardware_port,
         unit_id=hardware_unit_id,
         serial=SerialSettings(port=hardware_port, baudrate=hardware_baud),
