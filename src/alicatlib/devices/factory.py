@@ -1,4 +1,4 @@
-"""Device factory — identification pipeline + ``open_device`` context manager.
+"""Device factory — identification pipeline + ``open_device`` entry point.
 
 The factory implements design §5.9's staged identification flow:
 

@@ -756,11 +756,12 @@ software polling loop across one or more devices.
 ### 5.9 Device Factory and Facades
 
 Device construction has three jobs: open the transport, identify the hardware,
-and return the narrowest useful facade for that device kind. Opening is
-context-manager-first:
+and return the narrowest useful facade for that device kind. `open_device` is
+a coroutine that returns a fully-identified `Device`; the `Device` itself
+implements `__aenter__`/`__aexit__` (calling `close()` on exit), so both
+scoped and managed-lifetime usage fall out naturally:
 
 ```python
-@asynccontextmanager
 async def open_device(
     port: str | Transport | AlicatProtocolClient,
     *,
@@ -771,15 +772,21 @@ async def open_device(
     model_hint: str | None = None,
     assume_capabilities: Capability = Capability.NONE,
     assume_media: Medium | None = None,
-) -> AsyncIterator[Device]: ...
+) -> Device: ...
 ```
 
-Common usage:
+Common usage — scoped (script-style):
 
 ```python
 async with await open_device("/dev/ttyUSB0") as dev:
     frame = await dev.poll()
 ```
+
+Managed-lifetime (e.g. `AlicatManager`, the sync portal): `await
+open_device(...)` and call `await device.close()` on shutdown. Returning a
+bare `Device` (rather than wrapping in `@asynccontextmanager`) is what makes
+that pattern straightforward — otherwise every long-lived owner would need
+an `AsyncExitStack`.
 
 Inputs can be a port string, a pre-built `Transport`, or a pre-built
 `AlicatProtocolClient`.
