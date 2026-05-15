@@ -46,11 +46,11 @@ async def test_tare_flow_returns_a_frame(hardware_device: Device) -> None:
         result = await hardware_device.tare_flow()
     except AlicatFirmwareError:
         pytest.skip("tare_flow (T) requires numeric firmware (not GP)")
-    assert result.frame is not None
-    assert result.frame.unit_id == hardware_device.unit_id
+    assert result.reading is not None
+    assert result.reading.unit_id == hardware_device.unit_id
 
     print(  # noqa: T201
-        f"\n[hardware] tare_flow frame keys={sorted(result.frame.values.keys())}",
+        f"\n[hardware] tare_flow frame keys={sorted(result.reading.values.keys())}",
     )
 
 
@@ -68,8 +68,8 @@ async def test_tare_gauge_pressure_returns_a_frame(
         result = await hardware_device.tare_gauge_pressure()
     except AlicatFirmwareError:
         pytest.skip("tare_gauge_pressure (TP) requires numeric firmware (not GP)")
-    assert result.frame is not None
-    assert result.frame.unit_id == hardware_device.unit_id
+    assert result.reading is not None
+    assert result.reading.unit_id == hardware_device.unit_id
 
 
 @pytest.mark.anyio
@@ -106,4 +106,4 @@ async def test_tare_absolute_pressure_when_tareable_abs_present(
         )
 
     result = await hardware_device.tare_absolute_pressure()
-    assert result.frame is not None
+    assert result.reading is not None

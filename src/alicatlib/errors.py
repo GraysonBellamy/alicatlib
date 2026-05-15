@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from alicatlib.devices.kind import DeviceKind
     from alicatlib.devices.medium import Medium
     from alicatlib.firmware import FirmwareFamily, FirmwareVersion
+    from alicatlib.protocol import ProtocolKind
 
 __all__ = [
     "AlicatCapabilityError",
@@ -77,12 +78,25 @@ class ErrorContext:
     raw_response: bytes | None = None
     unit_id: str | None = None
     port: str | None = None
+    protocol: ProtocolKind | None = None
     firmware: FirmwareVersion | None = None
     device_kind: DeviceKind | None = None
     device_media: Medium | None = None
     command_media: Medium | None = None
     elapsed_s: float | None = None
     extra: Mapping[str, Any] = field(default_factory=_empty_extra)
+
+    @property
+    def address(self) -> str | int | None:
+        """Uniform cross-library accessor for the device's bus address.
+
+        Alicat's semantically-meaningful native field is :attr:`unit_id`
+        (the single-letter ``A``..``Z`` polling id), and that stays the
+        source of truth inside the library. :attr:`address` is the
+        cross-lib spelling consumers can read uniformly across
+        ``alicatlib`` / ``sartoriuslib`` / ``watlowlib`` / ``nidaqlib``.
+        """
+        return self.unit_id
 
     def __post_init__(self) -> None:
         # Frozen dataclass: route the assignment through ``object.__setattr__``.
@@ -172,6 +186,8 @@ class AlicatError(Exception):
             bits.append(f"unit_id={ctx.unit_id}")
         if ctx.port is not None:
             bits.append(f"port={ctx.port}")
+        if ctx.protocol is not None:
+            bits.append(f"protocol={ctx.protocol.value}")
         if ctx.firmware is not None:
             bits.append(f"firmware={ctx.firmware}")
         if ctx.device_kind is not None:

@@ -66,7 +66,7 @@ selected gas, selected code, and optional save flag echo.
 | `FULL_SCALE_QUERY` | `FPF` | `LINE` | `Device.full_scale(statistic)` — full-scale per statistic |
 
 `DCU` and `FPF` also run as a post-`??D*` sweep in the factory to bind
-[data-frame](data-frames.md) fields to their active `Unit` and
+[data-frame](readings.md) fields to their active `Unit` and
 populate `DeviceInfo.full_scale`.
 
 ### Setpoint — [commands/setpoint.py](../src/alicatlib/commands/setpoint.py)
@@ -194,7 +194,7 @@ pinned by dedicated unit tests.
 | `REQUEST_DATA` | `DV` | `LINE` | `Device.request(statistics, *, averaging_ms=1)` — on-demand statistic read |
 
 `POLL_DATA` decodes through the cached
-[`DataFrameFormat`](data-frames.md). `REQUEST_DATA` has a unique
+[`DataFrameFormat`](readings.md). `REQUEST_DATA` has a unique
 wire shape — the reply carries no unit-ID prefix; invalid statistics
 return a column-width run of dashes per slot and surface as `None`
 in `MeasurementSet`.
@@ -203,7 +203,7 @@ in `MeasurementSet`.
 
 | Command | Token | Mode | Surface |
 | --- | --- | --- | --- |
-| `STREAMING_RATE` | `NCS` | `LINE` | `Device.streaming_rate(rate_ms=...)` (min firmware: V10 10v05+) |
+| `STREAMING_RATE` | `NCS` | `LINE` | `Device.streaming_rate(rate_hz=...)` (min firmware: V10 10v05+) |
 
 Mode-transition bytes for streaming are **not** normal commands —
 start-stream is `{uid}@ @\r` and stop-stream is `@@ {uid}\r`, both
@@ -255,4 +255,4 @@ Per design §5.4, adding a command is ~50 lines and localised:
 6. Write a `FakeTransport` fixture test; see [testing.md](testing.md).
 
 No manager / recorder / sink changes are needed — sample flattening
-reads `DataFrame.as_dict()`, which is schema-stable across commands.
+reads `Reading.as_dict()`, which is schema-stable across commands.

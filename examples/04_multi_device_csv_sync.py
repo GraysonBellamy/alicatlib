@@ -28,10 +28,10 @@ def main() -> None:
         mgr.add("air", port2, serial=SerialSettings(port=port2, baudrate=baud))
 
         with (
-            record(mgr, rate_hz=10.0, duration=10.0) as stream,
+            record(mgr, rate_hz=10.0, duration=10.0) as recording,
             SyncCsvSink(output) as sink,
         ):
-            summary = pipe(stream, sink)
+            summary = pipe(recording, sink)
 
     print(f"wrote {output}")
     print(f"  started_at:      {summary.started_at.isoformat()}")

@@ -12,7 +12,8 @@ Surfaces:
   :class:`SyncAlicatManager` (+ :class:`ErrorPolicy` /
   :class:`DeviceResult` re-exports).
 * Recording — :func:`record`, :func:`pipe`,
-  :class:`AcquisitionSummary`, :class:`OverflowPolicy`.
+  :class:`SyncRecording`, :class:`AcquisitionSummary`,
+  :class:`OverflowPolicy`.
 * Sinks — :class:`SyncSinkAdapter` +
   :class:`SyncInMemorySink` / :class:`SyncCsvSink` /
   :class:`SyncJsonlSink` / :class:`SyncSqliteSink` /
@@ -21,6 +22,8 @@ Surfaces:
 * Discovery — :func:`list_serial_ports`, :func:`probe`,
   :func:`find_devices`, :class:`DiscoveryResult`,
   :data:`DEFAULT_DISCOVERY_BAUDRATES`.
+* Snapshot / unit helpers — :class:`DeviceSnapshot`,
+  :class:`AlicatDeviceSnapshot`, :func:`to_pint`.
 * Portal primitives — :class:`SyncPortal`, :func:`run_sync`.
 
 See ``docs/design.md`` §5.16 for the design.
@@ -28,6 +31,7 @@ See ``docs/design.md`` §5.16 for the design.
 
 from __future__ import annotations
 
+from alicatlib.devices.models import AlicatDeviceSnapshot, DeviceSnapshot
 from alicatlib.sync.device import (
     Alicat,
     SyncDevice,
@@ -48,6 +52,7 @@ from alicatlib.sync.portal import SyncPortal, run_sync
 from alicatlib.sync.recording import (
     AcquisitionSummary,
     OverflowPolicy,
+    SyncRecording,
     pipe,
     record,
 )
@@ -61,12 +66,15 @@ from alicatlib.sync.sinks import (
     SyncSinkAdapter,
     SyncSqliteSink,
 )
+from alicatlib.units import to_pint
 
 __all__ = [
     "DEFAULT_DISCOVERY_BAUDRATES",
     "AcquisitionSummary",
     "Alicat",
+    "AlicatDeviceSnapshot",
     "DeviceResult",
+    "DeviceSnapshot",
     "DiscoveryResult",
     "ErrorPolicy",
     "OverflowPolicy",
@@ -83,6 +91,7 @@ __all__ = [
     "SyncPostgresSink",
     "SyncPressureController",
     "SyncPressureMeter",
+    "SyncRecording",
     "SyncSinkAdapter",
     "SyncSqliteSink",
     "find_devices",
@@ -91,4 +100,5 @@ __all__ = [
     "probe",
     "record",
     "run_sync",
+    "to_pint",
 ]

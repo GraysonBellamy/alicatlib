@@ -6,6 +6,46 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-15
+
+### Unified Device-Library API (v1)
+
+Aligns alicatlib with the sibling-library spec ([UNIFIED_API_HANDOFF.md](UNIFIED_API_HANDOFF.md)) so consumers (`capa`, future SDKs) see one shape across `alicatlib` / `watlowlib` / `sartoriuslib` / `nidaqlib`. Breaking changes, no compat shims.
+
+### Added
+
+- `Reading.from_parsed(...)` — new canonical name for the timing-wrapped device read (formerly `DataFrame.from_parsed`).
+- `alicatlib.Sample.t_mono_ns` / `Sample.t_utc` / `Sample.t_midpoint_mono_ns` per the cross-lib timestamp contract (§C).
+- `alicatlib.Recording[T]` — context-manager payload carrying `stream`, mutable `summary`, `rate_hz`. Iterable (delegates to `stream`) so `async for batch in recording` works.
+- `alicatlib.PollSourceAdapter(name, device)` — single-device adapter that satisfies the recorder's `PollSource` Protocol. Honours the `names` filter per spec §E.
+- `DeviceResult.success(value)` / `DeviceResult.failure(error)` — additive classmethod factories (keyword construction still works).
+- `alicatlib.DeviceSnapshot` / `alicatlib.AlicatDeviceSnapshot` — cross-lib status snapshots built from cached identity + session counters; no I/O.
+- `Device.snapshot()` / `SyncDevice.snapshot()` — return a `AlicatDeviceSnapshot` without touching the wire.
+- `Session.recoverable_error_count` — public int incremented every time the session swallows-and-retries a transient (currently: streaming-mode idle-window timeouts).
+- `Session.last_error` — most recent enriched `ErrorContext` from a failed `execute()`, surfaced on `snapshot()`.
+- `alicatlib.units.to_pint(unit)` — return a pint-compatible unit string (or `None`). Lossy by design: PSIA / PSIG / PSID all collapse to `"psi"`.
+- `alicatlib.ProtocolKind` — single-member enum (`ASCII`) for cross-lib protocol-kind tagging in `DiscoveryResult` / `ErrorContext`.
+- `ErrorContext.address` — cross-lib `@property` returning `self.unit_id` so consumers can read the bus address uniformly.
+- `ErrorContext.protocol: ProtocolKind | None` — new base field, always `None` for direct alicat use today.
+- `alicatlib.sample_to_row` — top-level re-export of `alicatlib.sinks.sample_to_row` (documented path).
+- `alicatlib.sync.SyncRecording[T]` — sync analog of `Recording`, iterable.
+
+### Changed (breaking)
+
+- `alicatlib.DataFrame` → `alicatlib.Reading`. File renamed from `devices/data_frame.py` to `devices/reading.py`. The `format=` constructor kwarg is now `reading_format=`. The `monotonic_ns` field on `Reading` is now `t_mono_ns`.
+- `Sample.frame` → `Sample.reading`. Same rename on every wrapper dataclass that previously carried a `frame: DataFrame` field (`TareResult`, `DisplayLockResult`, `TotalizerResetResult`, `ValveHoldResult`, `SetpointState`).
+- `Sample.monotonic_ns` → `Sample.t_mono_ns`; `Sample.midpoint_at` → `Sample.t_utc`. `requested_at`, `received_at`, and `latency_s` remain as I/O-boundary provenance.
+- `Device.stream(rate_ms=...)` → `Device.stream(rate_hz=...)`. Convert at the protocol boundary (`rate_ms = round(1000 / rate_hz)`). Pass a very high `rate_hz` to request the device's "as-fast-as-possible" setting.
+- `DiscoveryResult` shape conforms to spec §B: `unit_id` → `address`, `info` → `device_info`, adds `protocol: ProtocolKind | None`, adds `elapsed_s: float`.
+- `record()` yields a `Recording(stream, summary, rate_hz)` instead of a bare async iterator.
+- `AcquisitionSummary` is now mutable. The recorder is the sole writer; counters update in place during the run. `finished_at` is `None` while in flight and set on context-manager exit.
+- `sample_to_row()`'s output schema: drops `midpoint_at`, adds `t_utc` (ISO 8601) and `t_mono_ns` (int). `Unit_ID` / `received_at` dedup behaviour is unchanged (hardware-validation finding 2026-04-17).
+
+### Deferred (intentionally out of scope)
+
+- `AlicatTransientTransportError` — alicat has not observed a cold-open or transient-retry race today, so this is deferred until evidence surfaces (spec §F).
+- `Device.expected_rate_hz` property — dropped in favour of `Recording.rate_hz` (spec §I), since the recorder owns the rate.
+
 ## [0.2.0] - 2026-05-10
 
 ### Added

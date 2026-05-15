@@ -3,7 +3,7 @@
 :func:`record` is the v1 acquisition primitive. It drives a
 :class:`~alicatlib.manager.AlicatManager` (or any
 :class:`PollSource`-shaped object — see below) at an absolute-target
-cadence and publishes the polled :class:`DataFrame` values into an
+cadence and publishes the polled :class:`Reading` values into an
 :class:`anyio.abc.ObjectReceiveStream` as per-tick
 ``Mapping[name, Sample]`` batches.
 
@@ -39,7 +39,7 @@ Design reference: ``docs/design.md`` §5.14.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -53,17 +53,18 @@ from alicatlib._logging import get_logger
 from alicatlib.streaming.sample import Sample
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterator, Sequence
+    from collections.abc import AsyncGenerator, Sequence
 
     from anyio.streams.memory import MemoryObjectSendStream
 
-    from alicatlib.devices.data_frame import DataFrame
+    from alicatlib.devices.reading import Reading
     from alicatlib.manager import DeviceResult
 
 __all__ = [
     "AcquisitionSummary",
     "OverflowPolicy",
     "PollSource",
+    "Recording",
     "record",
 ]
 
@@ -93,13 +94,23 @@ class OverflowPolicy(Enum):
     """Evict the oldest queued batch, then enqueue. Counted as late."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class AcquisitionSummary:
-    """Per-run summary emitted after ``record()``'s CM exits.
+    """Per-run summary owned by the recorder.
+
+    **Mutability contract (per the cross-lib spec §M):**
+
+    - The recorder is the *only* writer. It updates counters in place
+      during the run so progress polling (TUIs, dashboards) works
+      without a separate API.
+    - Consumers treat the summary as read-only.
+    - :attr:`finished_at` is ``None`` while the recording is in flight
+      and is set on context-manager exit.
 
     Attributes:
-        started_at: Wall-clock at the first scheduled tick.
-        finished_at: Wall-clock at producer shutdown.
+        started_at: Wall-clock at recorder entry.
+        finished_at: Wall-clock at producer shutdown — ``None`` while
+            the recording is in flight.
         samples_emitted: Count of per-tick batches actually pushed
             onto the receive stream. Partial batches (some devices
             errored under ``ErrorPolicy.RETURN``) still count as one
@@ -115,17 +126,53 @@ class AcquisitionSummary:
     """
 
     started_at: datetime
-    finished_at: datetime
-    samples_emitted: int
-    samples_late: int
-    max_drift_ms: float
+    finished_at: datetime | None = None
+    samples_emitted: int = 0
+    samples_late: int = 0
+    max_drift_ms: float = 0.0
+
+
+@dataclass(slots=True)
+class Recording[T]:
+    """The object yielded by :func:`record`'s async context manager.
+
+    Wraps the live receive stream, the (mutable) :class:`AcquisitionSummary`
+    the recorder is updating in place, and the rate the recorder is
+    running at. Consumers iterate via ``async for batch in recording``
+    (the instance delegates to :attr:`stream`), observe progress via
+    :attr:`summary`, and read :attr:`rate_hz` for queue-sizing decisions.
+
+    Attributes:
+        stream: Async iterator of per-tick batches (or whatever record
+            type the lib emits). Typed via ``T`` so consumer code can
+            stay strict.
+        summary: Live :class:`AcquisitionSummary` — counters update in
+            place during the run; consumers must not mutate it.
+        rate_hz: The rate the recorder is running at, captured at
+            entry. Useful for back-pressure sizing in wrappers.
+    """
+
+    stream: AsyncIterator[T]
+    summary: AcquisitionSummary
+    rate_hz: float
+
+    def __aiter__(self) -> AsyncIterator[T]:
+        """Delegate iteration to :attr:`stream`.
+
+        Lets ``async for batch in recording`` work without forcing
+        callers to dereference ``recording.stream`` themselves —
+        ergonomic for the common case, while keeping the typed
+        attribute around for consumers that want to interleave reads
+        with reading :attr:`summary` or :attr:`rate_hz`.
+        """
+        return self.stream.__aiter__()
 
 
 class PollSource(Protocol):
     """Minimal shape the recorder needs from its dispatcher.
 
     :class:`~alicatlib.manager.AlicatManager` satisfies this: its
-    ``poll(names)`` returns a ``Mapping[str, DeviceResult[DataFrame]]``.
+    ``poll(names)`` returns a ``Mapping[str, DeviceResult[Reading]]``.
     Using a Protocol keeps :func:`record` testable against a lightweight
     stub without pulling in the whole manager + transport stack.
     """
@@ -133,11 +180,11 @@ class PollSource(Protocol):
     async def poll(
         self,
         names: Sequence[str] | None = None,
-    ) -> Mapping[str, DeviceResult[DataFrame]]:
+    ) -> Mapping[str, DeviceResult[Reading]]:
         """Poll every named device (or all under management) concurrently.
 
         Must return a mapping keyed by the manager-assigned device name.
-        Successful polls carry the :class:`DataFrame` as ``.value``;
+        Successful polls carry the :class:`Reading` as ``.value``;
         failed ones carry the :class:`~alicatlib.errors.AlicatError` as
         ``.error`` (per :class:`~alicatlib.manager.ErrorPolicy.RETURN`).
         """
@@ -153,17 +200,19 @@ async def record(
     names: Sequence[str] | None = None,
     overflow: OverflowPolicy = OverflowPolicy.BLOCK,
     buffer_size: int = 64,
-) -> AsyncGenerator[AsyncIterator[Mapping[str, Sample]]]:
+) -> AsyncGenerator[Recording[Mapping[str, Sample]]]:
     """Record polled samples into a receive stream at an absolute cadence.
 
     Usage::
 
-        async with record(mgr, rate_hz=10, duration=60) as stream:
-            async for batch in stream:
+        async with record(mgr, rate_hz=10, duration=60) as recording:
+            async for batch in recording.stream:
                 process(batch)
+            print(recording.summary.samples_emitted)
 
-    The CM yields an async iterator of per-tick sample batches. Each
-    batch is a ``Mapping[name, Sample]`` — one entry per device that
+    The CM yields a :class:`Recording` carrying the async iterator, the
+    live :class:`AcquisitionSummary`, and the rate. Each batch on the
+    stream is a ``Mapping[name, Sample]`` — one entry per device that
     polled successfully on that tick. Devices whose :class:`DeviceResult`
     carries an error are omitted from that batch and logged at WARN.
 
@@ -182,7 +231,7 @@ async def record(
             ``64`` mirrors the design default.
 
     Yields:
-        An async iterator of per-tick ``Mapping[device_name, Sample]``.
+        A :class:`Recording` of per-tick ``Mapping[device_name, Sample]``.
 
     Raises:
         ValueError: If ``rate_hz <= 0`` or ``duration <= 0`` or
@@ -208,9 +257,14 @@ async def record(
     send_stream, receive_stream = anyio.create_memory_object_stream[Mapping[str, Sample]](
         max_buffer_size=buffer_size,
     )
-    stats = _RunStats()
-
     started_at = datetime.now(UTC)
+    summary = AcquisitionSummary(started_at=started_at)
+    recording: Recording[Mapping[str, Sample]] = Recording(
+        stream=receive_stream,
+        summary=summary,
+        rate_hz=rate_hz,
+    )
+
     _logger.info(
         "recorder.start",
         extra={
@@ -231,30 +285,23 @@ async def record(
             total_ticks,
             names,
             overflow,
-            stats,
+            summary,
         )
         try:
-            yield receive_stream
+            yield recording
         finally:
             # Cancel + drain before the CM returns — producer lifetime
             # is strictly nested inside the ``async with`` per §5.14.
             tg.cancel_scope.cancel()
 
-    finished_at = datetime.now(UTC)
-    summary = AcquisitionSummary(
-        started_at=started_at,
-        finished_at=finished_at,
-        samples_emitted=stats.emitted,
-        samples_late=stats.late,
-        max_drift_ms=stats.max_drift_ms,
-    )
+    summary.finished_at = datetime.now(UTC)
     _logger.info(
         "recorder.stop",
         extra={
             "samples_emitted": summary.samples_emitted,
             "samples_late": summary.samples_late,
             "max_drift_ms": summary.max_drift_ms,
-            "duration_s": (finished_at - started_at).total_seconds(),
+            "duration_s": (summary.finished_at - started_at).total_seconds(),
         },
     )
 
@@ -264,15 +311,6 @@ async def record(
 # ---------------------------------------------------------------------------
 
 
-@dataclass(slots=True)
-class _RunStats:
-    """Producer-side counters surfaced via :class:`AcquisitionSummary`."""
-
-    emitted: int = 0
-    late: int = 0
-    max_drift_ms: float = 0.0
-
-
 async def _run_producer(
     source: PollSource,
     send_stream: MemoryObjectSendStream[Mapping[str, Sample]],
@@ -280,7 +318,7 @@ async def _run_producer(
     total_ticks: int | None,
     names: Sequence[str] | None,
     overflow: OverflowPolicy,
-    stats: _RunStats,
+    summary: AcquisitionSummary,
 ) -> None:
     """Drive the absolute-cadence poll loop.
 
@@ -288,6 +326,9 @@ async def _run_producer(
     monotonic) so ``anyio.sleep_until`` interprets targets against
     the same clock. Mixing :func:`time.monotonic` values in here
     would produce subtly wrong sleep durations (design §5.14).
+
+    Per §M, the live :class:`AcquisitionSummary` is the recorder's
+    counter store — increments happen in place.
     """
     start = anyio.current_time()
     tick = 0
@@ -299,7 +340,7 @@ async def _run_producer(
                 # Overran by more than one full period — skip to the
                 # next valid slot rather than trying to catch up.
                 missed = int((now - target) / period)
-                stats.late += missed
+                summary.samples_late += missed
                 tick += missed
                 target = start + tick * period
             if anyio.current_time() < target:
@@ -315,16 +356,16 @@ async def _run_producer(
 
             drift_s = anyio.current_time() - target
             drift_ms = drift_s * 1_000.0
-            stats.max_drift_ms = max(stats.max_drift_ms, drift_ms)
+            summary.max_drift_ms = max(summary.max_drift_ms, drift_ms)
 
-            await _publish(send_stream, batch, overflow, stats)
+            await _publish(send_stream, batch, overflow, summary)
             tick += 1
     finally:
         await send_stream.aclose()
 
 
 def _build_batch(
-    results: Mapping[str, DeviceResult[DataFrame]],
+    results: Mapping[str, DeviceResult[Reading]],
     requested_at: datetime,
     received_at: datetime,
     sent_ns: int,
@@ -333,14 +374,14 @@ def _build_batch(
     """Convert per-device results into a :class:`Sample` batch.
 
     Errored devices are dropped from the batch with a WARN log — the
-    recorder guarantees every :class:`Sample` carries a :class:`DataFrame`.
+    recorder guarantees every :class:`Sample` carries a :class:`Reading`.
     """
     midpoint = _midpoint(requested_at, received_at)
     latency_s = (received_at - requested_at).total_seconds()
-    # Use the monotonic received-at as the Sample's scheduling clock;
-    # averaging the ns boundary gives a cleaner per-device estimate
-    # if we later plumb per-device timing into the manager.
-    mono = (sent_ns + recv_ns) // 2
+    # t_mono_ns is the monotonic-clock acquisition midpoint — averaging
+    # the send/receive ns boundary gives the same point-estimate as
+    # t_utc, just on the monotonic axis (canonical join key per §C).
+    t_mono_ns = (sent_ns + recv_ns) // 2
     batch: dict[str, Sample] = {}
     for name, result in results.items():
         if result.error is not None or result.value is None:
@@ -349,16 +390,16 @@ def _build_batch(
                 extra={"device": name, "error": repr(result.error)},
             )
             continue
-        frame = result.value
+        reading = result.value
         batch[name] = Sample(
             device=name,
-            unit_id=frame.unit_id,
-            monotonic_ns=mono,
+            unit_id=reading.unit_id,
+            t_mono_ns=t_mono_ns,
+            t_utc=midpoint,
             requested_at=requested_at,
             received_at=received_at,
-            midpoint_at=midpoint,
             latency_s=latency_s,
-            frame=frame,
+            reading=reading,
         )
     return batch
 
@@ -373,7 +414,7 @@ async def _publish(
     send_stream: MemoryObjectSendStream[Mapping[str, Sample]],
     batch: Mapping[str, Sample],
     overflow: OverflowPolicy,
-    stats: _RunStats,
+    summary: AcquisitionSummary,
 ) -> None:
     """Enqueue ``batch`` per the configured :class:`OverflowPolicy`.
 
@@ -383,18 +424,18 @@ async def _publish(
     """
     if overflow is OverflowPolicy.BLOCK:
         await send_stream.send(batch)
-        stats.emitted += 1
+        summary.samples_emitted += 1
         return
     if overflow is OverflowPolicy.DROP_NEWEST:
         try:
             send_stream.send_nowait(batch)
         except anyio.WouldBlock:
-            stats.late += 1
+            summary.samples_late += 1
             _logger.warning(
                 "recorder.drop_newest",
                 extra={"policy": overflow.value, "reason": "consumer_backpressure"},
             )
             return
-        stats.emitted += 1
+        summary.samples_emitted += 1
         return
     raise AssertionError(f"unreachable overflow policy: {overflow!r}")

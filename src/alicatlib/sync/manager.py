@@ -29,8 +29,8 @@ if TYPE_CHECKING:
 
     from alicatlib.commands import Command
     from alicatlib.devices.base import Device
-    from alicatlib.devices.data_frame import DataFrame
     from alicatlib.devices.models import MeasurementSet
+    from alicatlib.devices.reading import Reading
     from alicatlib.protocol import AlicatProtocolClient
     from alicatlib.registry import Statistic
     from alicatlib.transport.base import SerialSettings, Transport
@@ -212,7 +212,7 @@ class SyncAlicatManager:
     def poll(
         self,
         names: Sequence[str] | None = None,
-    ) -> Mapping[str, DeviceResult[DataFrame]]:
+    ) -> Mapping[str, DeviceResult[Reading]]:
         """Blocking :meth:`AlicatManager.poll`."""
         mgr = self._require_mgr()
         return self.portal.call(mgr.poll, names)

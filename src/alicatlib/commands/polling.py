@@ -4,7 +4,7 @@ r"""Polling commands — primer ``A\r`` poll and ``DV`` request-data query.
 frame back, parse it against the :class:`DataFrameFormat` the session
 cached at startup. The command returns a pure :class:`ParsedFrame` — the
 session wraps it with ``received_at`` / ``monotonic_ns`` into a
-:class:`DataFrame` at the read site (design §5.6).
+:class:`Reading` at the read site (design §5.6).
 
 :data:`REQUEST_DATA` (``DV``) is the targeted sibling of ``POLL_DATA``:
 instead of returning every cached field, it reports a caller-chosen list
@@ -42,7 +42,7 @@ from alicatlib.registry._codes_gen import STATISTIC_BY_CODE
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from alicatlib.devices.data_frame import ParsedFrame
+    from alicatlib.devices.reading import ParsedFrame
 
 __all__ = [
     "POLL_DATA",
@@ -114,9 +114,9 @@ class PollData(Command[PollRequest, "ParsedFrame"]):
     :class:`DecodeContext`.
 
     The decode layer returns a :class:`ParsedFrame` rather than a
-    :class:`DataFrame` because timing belongs to the I/O layer, not the
+    :class:`Reading` because timing belongs to the I/O layer, not the
     pure decode step. The session's ``execute()`` wraps via
-    :meth:`DataFrame.from_parsed` before returning from the facade
+    :meth:`Reading.from_parsed` before returning from the facade
     (``Device.poll()``), so users never see a raw :class:`ParsedFrame`
     unless they go through the ``session.execute(POLL_DATA, ...)``
     escape hatch. See design §5.6.

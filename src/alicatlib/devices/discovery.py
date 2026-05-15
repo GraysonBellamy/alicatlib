@@ -25,6 +25,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass
 from itertools import product
+from time import monotonic
 from typing import TYPE_CHECKING, Final
 
 import anyio
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from alicatlib.devices.models import DeviceInfo
+    from alicatlib.protocol import ProtocolKind
 
 __all__ = [
     "DEFAULT_DISCOVERY_BAUDRATES",
@@ -72,17 +74,25 @@ _DEFAULT_MAX_CONCURRENCY: Final[int] = 8
 class DiscoveryResult:
     """Outcome of a single :func:`probe` attempt.
 
-    Exactly one of :attr:`info` / :attr:`error` is populated — ok results
-    carry a fully-identified :class:`DeviceInfo`, failed ones carry the
-    typed :class:`AlicatError` from the identification pipeline. The
-    :attr:`ok` convenience lets callers filter without ``hasattr``.
+    Exactly one of :attr:`device_info` / :attr:`error` is populated —
+    ok results carry a fully-identified :class:`DeviceInfo`, failed
+    ones carry the typed :class:`AlicatError` from the identification
+    pipeline. The :attr:`ok` convenience lets callers filter without
+    ``hasattr``.
+
+    Shape conforms to the cross-lib spec §B: :attr:`address` is the
+    bus address (Alicat ``unit_id``, ``"A"``..``"Z"``), :attr:`protocol`
+    names the wire dialect (always :attr:`ProtocolKind.ASCII` for
+    alicat), and :attr:`elapsed_s` measures how long the probe took.
     """
 
     port: str
-    unit_id: str
-    baudrate: int
-    info: DeviceInfo | None
+    address: str | int | None
+    baudrate: int | None
+    protocol: ProtocolKind | None
+    device_info: DeviceInfo | None
     error: AlicatError | None
+    elapsed_s: float
 
     @property
     def ok(self) -> bool:
@@ -111,6 +121,7 @@ async def _probe_with_client(
     port: str,
     unit_id: str,
     baudrate: int,
+    started_mono: float | None = None,
 ) -> DiscoveryResult:
     """Identify using a pre-wired client, catching every :class:`AlicatError`.
 
@@ -119,22 +130,29 @@ async def _probe_with_client(
     test-inject cleanly, and the identification logic is the interesting
     part of probing.
     """
+    from alicatlib.protocol import ProtocolKind  # noqa: PLC0415 — avoid import cycle at module load
+
+    start = monotonic() if started_mono is None else started_mono
     try:
         info = await identify_device(client, unit_id)
     except AlicatError as err:
         return DiscoveryResult(
             port=port,
-            unit_id=unit_id,
+            address=unit_id,
             baudrate=baudrate,
-            info=None,
+            protocol=ProtocolKind.ASCII,
+            device_info=None,
             error=err,
+            elapsed_s=monotonic() - start,
         )
     return DiscoveryResult(
         port=port,
-        unit_id=unit_id,
+        address=unit_id,
         baudrate=baudrate,
-        info=info,
+        protocol=ProtocolKind.ASCII,
+        device_info=info,
         error=None,
+        elapsed_s=monotonic() - start,
     )
 
 
@@ -153,6 +171,9 @@ async def probe(
     are caught here the same as identification errors; the caller sees
     one shape whether the device is offline, misconfigured, or silent.
     """
+    from alicatlib.protocol import ProtocolKind  # noqa: PLC0415 — avoid import cycle at module load
+
+    started_mono = monotonic()
     settings = SerialSettings(port=port, baudrate=baudrate)
     transport = SerialTransport(settings)
     try:
@@ -160,10 +181,12 @@ async def probe(
     except AlicatError as err:
         return DiscoveryResult(
             port=port,
-            unit_id=unit_id,
+            address=unit_id,
             baudrate=baudrate,
-            info=None,
+            protocol=ProtocolKind.ASCII,
+            device_info=None,
             error=err,
+            elapsed_s=monotonic() - started_mono,
         )
     try:
         client = AlicatProtocolClient(
@@ -179,6 +202,7 @@ async def probe(
             port=port,
             unit_id=unit_id,
             baudrate=baudrate,
+            started_mono=started_mono,
         )
     finally:
         # Best-effort teardown — a close failure here shouldn't hide

@@ -13,7 +13,7 @@ continuously until stopped. This module owns that runtime:
 - Producer — a background task reads frames from the transport into a
   bounded :mod:`anyio.streams.memory` object stream, parsing each line
   with the session's cached
-  :class:`~alicatlib.devices.data_frame.DataFrameFormat`. Overflow is
+  :class:`~alicatlib.devices.reading.DataFrameFormat`. Overflow is
   controlled by :class:`OverflowPolicy` (design §5.14 — reused from
   the sample recorder so the knob is one concept across acquisition
   surfaces). Parse errors are logged and skipped unless
@@ -51,7 +51,7 @@ from alicatlib.commands.streaming import (
     encode_start_stream,
     encode_stop_stream,
 )
-from alicatlib.devices.data_frame import DataFrame
+from alicatlib.devices.reading import Reading
 from alicatlib.errors import (
     AlicatParseError,
     AlicatStreamingModeError,
@@ -71,7 +71,7 @@ if TYPE_CHECKING:
         MemoryObjectSendStream,
     )
 
-    from alicatlib.devices.data_frame import DataFrameFormat
+    from alicatlib.devices.reading import DataFrameFormat
     from alicatlib.devices.session import Session
 
 
@@ -159,8 +159,8 @@ class StreamingSession:
         self._overflow = overflow
         self._buffer_size = buffer_size
         self._format: DataFrameFormat | None = session.data_frame_format
-        self._send: MemoryObjectSendStream[DataFrame] | None = None
-        self._recv: MemoryObjectReceiveStream[DataFrame] | None = None
+        self._send: MemoryObjectSendStream[Reading] | None = None
+        self._recv: MemoryObjectReceiveStream[Reading] | None = None
         self._task_group: TaskGroup | None = None
         self._entered = False
         self._producer_failure: BaseException | None = None
@@ -232,7 +232,7 @@ class StreamingSession:
         # Step 4: producer task. The task group is entered here and
         # exited in ``__aexit__`` — the producer's lifetime matches the
         # streaming context exactly.
-        self._send, self._recv = anyio.create_memory_object_stream[DataFrame](
+        self._send, self._recv = anyio.create_memory_object_stream[Reading](
             max_buffer_size=self._buffer_size,
         )
         task_group = anyio.create_task_group()
@@ -321,8 +321,8 @@ class StreamingSession:
         """Return self — :class:`StreamingSession` is its own iterator."""
         return self
 
-    async def __anext__(self) -> DataFrame:
-        """Return the next buffered :class:`DataFrame`.
+    async def __anext__(self) -> Reading:
+        """Return the next buffered :class:`Reading`.
 
         Raises :class:`StopAsyncIteration` when the producer has closed
         the send side (either on context exit, or under
@@ -379,7 +379,9 @@ class StreamingSession:
                     # Idle window expired without a frame. Don't treat
                     # as failure — the device may be paused or the
                     # rate may be below our read window. Keep looping
-                    # until cancelled.
+                    # until cancelled. Counts as a recoverable error
+                    # per spec §J so dashboards can see idle stalls.
+                    self._session.recoverable_error_count += 1
                     continue
                 except AlicatTransportError as err:
                     # Transport torn down mid-stream (port yanked,
@@ -423,11 +425,11 @@ class StreamingSession:
                     )
                     continue
 
-                frame = DataFrame.from_parsed(
+                frame = Reading.from_parsed(
                     parsed,
-                    format=self._format,
+                    reading_format=self._format,
                     received_at=datetime.now(UTC),
-                    monotonic_ns=monotonic_ns(),
+                    t_mono_ns=monotonic_ns(),
                 )
                 await self._dispatch_frame(frame)
         finally:
@@ -436,7 +438,7 @@ class StreamingSession:
             if self._send is not None:  # pyright: ignore[reportUnnecessaryComparison]
                 await self._send.aclose()
 
-    async def _dispatch_frame(self, frame: DataFrame) -> None:
+    async def _dispatch_frame(self, frame: Reading) -> None:
         """Hand ``frame`` to the consumer, honouring the overflow policy."""
         assert self._send is not None  # noqa: S101 — narrow for type checker
         assert self._recv is not None  # noqa: S101 — narrow for type checker

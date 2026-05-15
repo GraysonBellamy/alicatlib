@@ -78,8 +78,8 @@ from alicatlib.commands import (
     ZeroBandRequest,
 )
 from alicatlib.commands._firmware_cutoffs import uses_modern_gas_select
-from alicatlib.devices.data_frame import DataFrame
 from alicatlib.devices.models import (
+    AlicatDeviceSnapshot,
     AnalogOutputChannel,
     DisplayLockResult,
     MeasurementSet,
@@ -88,6 +88,7 @@ from alicatlib.devices.models import (
     TotalizerId,
     TotalizerResetResult,
 )
+from alicatlib.devices.reading import Reading
 from alicatlib.errors import (
     AlicatUnsupportedCommandError,
     AlicatValidationError,
@@ -102,7 +103,6 @@ if TYPE_CHECKING:
     from typing import Any
 
     from alicatlib.commands import Command
-    from alicatlib.devices.data_frame import ParsedFrame
     from alicatlib.devices.models import (
         AnalogOutputSourceSetting,
         AverageTimingSetting,
@@ -120,6 +120,7 @@ if TYPE_CHECKING:
         UserDataSetting,
         ZeroBandSetting,
     )
+    from alicatlib.devices.reading import ParsedFrame
     from alicatlib.devices.session import Session
     from alicatlib.devices.streaming import OverflowPolicy, StreamingSession
     from alicatlib.registry import Gas, Statistic, Unit
@@ -187,15 +188,45 @@ class Device:
         """
         return self._session
 
+    # --------------------------------------------------------------- snapshot
+
+    async def snapshot(self) -> AlicatDeviceSnapshot:
+        """Return a no-I/O cached status snapshot of this device.
+
+        Built from :class:`DeviceInfo` + the session's counters /
+        last-error state — never touches the wire. Useful for status
+        CLIs, dashboards, and healthchecks where polling would be
+        overkill.
+
+        The ``name`` field falls back to the bus unit id when the
+        :class:`Device` has no manager-assigned name (most direct
+        :func:`~alicatlib.devices.factory.open_device` users); the
+        manager's status views can override it from outside.
+        """
+        info = self._session.info
+        return AlicatDeviceSnapshot(
+            name=self._session.unit_id,
+            model=info.model,
+            firmware=str(info.firmware),
+            serial=info.serial,
+            connected=not self._session.closed,
+            last_error=self._session.last_error,
+            recoverable_error_count=self._session.recoverable_error_count,
+            captured_at=datetime.now(UTC),
+            unit_id=self._session.unit_id,
+            media=info.media,
+            capabilities=info.capabilities,
+        )
+
     # --------------------------------------------------------------- polling
 
-    async def poll(self) -> DataFrame:
+    async def poll(self) -> Reading:
         """Read one data frame.
 
         Lazy-probes ``??D*`` the first time it's called if the session
         didn't have a cached :class:`DataFrameFormat` yet. Returns a
-        :class:`DataFrame` with read-site ``received_at`` and
-        ``monotonic_ns`` captured by the session.
+        :class:`Reading` with read-site ``received_at`` and
+        ``t_mono_ns`` captured by the session.
         """
         return await self._session.poll()
 
@@ -421,7 +452,7 @@ class Device:
         expectation on every call so the precondition is auditable
         after the fact (design §5.18 pt 6). The device replies with a
         post-op data frame; the returned :class:`TareResult` wraps it
-        as a :class:`DataFrame` with read-site timing.
+        as a :class:`Reading` with read-site timing.
         """
         _logger.info(
             _TARE_FLOW_PRECONDITION,
@@ -495,11 +526,11 @@ class Device:
             fmt = await self._session.refresh_data_frame_format()
         parsed = await self._session.execute(command, request)
         return TareResult(
-            frame=DataFrame.from_parsed(
+            reading=Reading.from_parsed(
                 parsed,
-                format=fmt,
+                reading_format=fmt,
                 received_at=datetime.now(UTC),
-                monotonic_ns=monotonic_ns(),
+                t_mono_ns=monotonic_ns(),
             ),
         )
 
@@ -674,11 +705,11 @@ class Device:
             fmt = await self._session.refresh_data_frame_format()
         parsed = await self._session.execute(command, request)
         return DisplayLockResult(
-            frame=DataFrame.from_parsed(
+            reading=Reading.from_parsed(
                 parsed,
-                format=fmt,
+                reading_format=fmt,
                 received_at=datetime.now(UTC),
-                monotonic_ns=monotonic_ns(),
+                t_mono_ns=monotonic_ns(),
             ),
         )
 
@@ -817,11 +848,11 @@ class Device:
             fmt = await self._session.refresh_data_frame_format()
         parsed = await self._session.execute(command, request)
         return TotalizerResetResult(
-            frame=DataFrame.from_parsed(
+            reading=Reading.from_parsed(
                 parsed,
-                format=fmt,
+                reading_format=fmt,
                 received_at=datetime.now(UTC),
-                monotonic_ns=monotonic_ns(),
+                t_mono_ns=monotonic_ns(),
             ),
         )
 
@@ -847,7 +878,7 @@ class Device:
     def stream(
         self,
         *,
-        rate_ms: int | None = None,
+        rate_hz: float | None = None,
         strict: bool = False,
         overflow: OverflowPolicy | None = None,
         buffer_size: int = 256,
@@ -857,7 +888,7 @@ class Device:
         Returns a :class:`StreamingSession` — an async context manager
         *and* an async iterator::
 
-            async with dev.stream(rate_ms=50) as stream:
+            async with dev.stream(rate_hz=20) as stream:
                 async for frame in stream:
                     process(frame)
 
@@ -868,12 +899,15 @@ class Device:
         streamer per port.
 
         Args:
-            rate_ms: If not ``None``, configures ``NCS`` (streaming
-                rate) before entering streaming mode. V10 >= 10v05
-                only; older firmware lacks the rate command and keeps
-                its 50 ms default. ``None`` leaves the device's current
-                rate alone; ``0`` is the device's "as-fast-as-possible"
-                setting.
+            rate_hz: If not ``None``, configures ``NCS`` (streaming
+                rate) before entering streaming mode. Converted to the
+                device's millisecond ``NCS`` argument at the boundary
+                (``rate_ms = round(1000 / rate_hz)``); pass a very high
+                rate (e.g. ``rate_hz=20000``) for the device's
+                "as-fast-as-possible" setting. V10 >= 10v05 only;
+                older firmware lacks the rate command and keeps its
+                50 ms (20 Hz) default. ``None`` leaves the device's
+                current rate alone.
             strict: If ``True``, a malformed frame from the device
                 propagates out of ``__anext__`` and tears down the
                 stream. Default ``False`` logs and skips.
@@ -882,7 +916,7 @@ class Device:
                 :attr:`OverflowPolicy.DROP_OLDEST` — latest-data-wins
                 is the right default for high-rate telemetry.
             buffer_size: Producer/consumer buffer depth. Default 256
-                frames; at the default 50 ms rate that's ~13 s of
+                frames; at the device's default 20 Hz that's ~13 s of
                 backlog.
         """
         from alicatlib.devices.streaming import (  # noqa: PLC0415 — lazy to avoid import cycle
@@ -892,6 +926,12 @@ class Device:
             StreamingSession as _StreamingSession,
         )
 
+        if rate_hz is not None and rate_hz <= 0:
+            raise AlicatValidationError(
+                f"rate_hz must be > 0, got {rate_hz!r}",
+                context=ErrorContext(extra={"rate_hz": rate_hz}),
+            )
+        rate_ms = None if rate_hz is None else max(0, round(1000.0 / rate_hz))
         return _StreamingSession(
             self._session,
             rate_ms=rate_ms,

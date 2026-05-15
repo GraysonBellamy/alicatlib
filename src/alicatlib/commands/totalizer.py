@@ -50,7 +50,7 @@ from alicatlib.firmware import FirmwareFamily, FirmwareVersion
 from alicatlib.protocol.parser import parse_bool_code, parse_fields, parse_int
 
 if TYPE_CHECKING:
-    from alicatlib.devices.data_frame import ParsedFrame
+    from alicatlib.devices.reading import ParsedFrame
 
 __all__ = [
     "TOTALIZER_CONFIG",

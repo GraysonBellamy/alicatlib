@@ -51,7 +51,7 @@ from alicatlib.commands.system import (
 )
 from alicatlib.config import AlicatConfig
 from alicatlib.devices._eeprom_wear import EepromWearMonitor
-from alicatlib.devices.data_frame import DataFrame
+from alicatlib.devices.reading import Reading
 from alicatlib.errors import (
     AlicatConnectionError,
     AlicatError,
@@ -69,8 +69,8 @@ from alicatlib.firmware import FirmwareFamily
 from alicatlib.protocol.framing import strip_eol
 
 if TYPE_CHECKING:
-    from alicatlib.devices.data_frame import DataFrameFormat, ParsedFrame
     from alicatlib.devices.models import DeviceInfo
+    from alicatlib.devices.reading import DataFrameFormat, ParsedFrame
     from alicatlib.firmware import FirmwareVersion
     from alicatlib.protocol.client import AlicatProtocolClient
     from alicatlib.registry.loop_control import LoopControlVariable
@@ -239,6 +239,15 @@ class Session:
         # BROKEN session refuses further dispatch, surfacing the
         # situation instead of hiding it behind a silent timeout.
         self._state: SessionState = SessionState.OPERATIONAL
+        # Last enriched :class:`ErrorContext` from a failed
+        # :meth:`execute`, exposed via :attr:`last_error` and consumed
+        # by :meth:`Device.snapshot`. ``None`` until the first failure.
+        self._last_error: ErrorContext | None = None
+        # Count of transient errors the session swallowed and retried —
+        # surfaced via :attr:`recoverable_error_count` and on the
+        # snapshot. Public mutable int per spec §J; the streaming
+        # producer and capability prober increment it directly.
+        self.recoverable_error_count: int = 0
 
     # ---------------------------------------------------------------- properties
 
@@ -276,6 +285,18 @@ class Session:
         through every call site.
         """
         return self._config
+
+    @property
+    def last_error(self) -> ErrorContext | None:
+        """Most recently observed :class:`ErrorContext` from a failed execute.
+
+        Populated inside :meth:`execute`'s enrichment branch — the
+        enriched context (port + unit_id + firmware + elapsed_s + ...)
+        is the same one re-raised on the exception. Consumed by
+        :meth:`Device.snapshot` so status views can see the last
+        failure without holding a reference to the exception itself.
+        """
+        return self._last_error
 
     @property
     def state(self) -> SessionState:
@@ -379,7 +400,7 @@ class Session:
             return await self._dispatch(command, wire_bytes, ctx, timeout=timeout)
         except AlicatError as err:
             elapsed_s = (monotonic_ns() - started) / 1e9
-            raise err.with_context(
+            enriched = err.with_context(
                 command_name=command.name,
                 command_bytes=wire_bytes,
                 unit_id=self._unit_id,
@@ -389,7 +410,9 @@ class Session:
                 device_media=self._info.media,
                 command_media=command.media,
                 elapsed_s=elapsed_s,
-            ) from None
+            )
+            self._last_error = enriched.context
+            raise enriched from None
 
     async def _dispatch[Req, Resp](
         self,
@@ -674,11 +697,11 @@ class Session:
 
     # ---------------------------------------------------------------- poll convenience
 
-    async def poll(self) -> DataFrame:
+    async def poll(self) -> Reading:
         """Convenience poll — execute ``POLL_DATA`` and wrap with read-site timing.
 
         This is the one place the session owns timing capture; per design
-        §5.6 the :class:`DataFrame` is the session's job, not the
+        §5.6 the :class:`Reading` is the session's job, not the
         command's. Callers that want the pure (clock-free)
         :class:`ParsedFrame` go through
         ``session.execute(POLL_DATA, PollRequest())`` instead.
@@ -690,11 +713,11 @@ class Session:
         # Timing captured as close to the read site as the Session sees.
         # Exact-to-the-byte timing would require plumbing callbacks into
         # the protocol client; deferred until a real need surfaces (design §5.6).
-        return DataFrame.from_parsed(
+        return Reading.from_parsed(
             parsed,
-            format=fmt,
+            reading_format=fmt,
             received_at=datetime.now(UTC),
-            monotonic_ns=monotonic_ns(),
+            t_mono_ns=monotonic_ns(),
         )
 
     # ---------------------------------------------------------------- lifecycle changes

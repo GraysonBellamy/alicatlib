@@ -16,7 +16,7 @@ See [Design](design.md) §5.8 for the authoritative architecture and
 
 ```python
 async with await open_device("/dev/ttyUSB0") as dev:
-    async with dev.stream(rate_ms=50) as stream:
+    async with dev.stream(rate_hz=20) as stream:
         async for frame in stream:
             print(frame.get_float("Mass_Flow"))
 ```
@@ -32,7 +32,7 @@ runs under `__aexit__` even when the body raises.
 
 | Parameter | Default | Purpose |
 | --- | --- | --- |
-| `rate_ms` | `None` | If set, configures `NCS` before entering streaming mode. `0` is "as-fast-as-possible"; distinct from `None` ("leave device at its current rate"). Firmware-gated at V10 >= 10v05 by the `STREAMING_RATE` command. |
+| `rate_hz` | `None` | If set, configures `NCS` before entering streaming mode. `0` is "as-fast-as-possible"; distinct from `None` ("leave device at its current rate"). Firmware-gated at V10 >= 10v05 by the `STREAMING_RATE` command. |
 | `strict` | `False` | When `True`, `AlicatParseError` from a malformed frame propagates out of `__anext__` and tears the stream down. When `False`, the error is logged at WARN and the producer continues. |
 | `overflow` | `DROP_OLDEST` | Buffer backpressure policy — see below. |
 | `buffer_size` | `256` | Bounded producer/consumer buffer depth. 256 frames at 50 ms is ~13 s of backlog. |
@@ -89,7 +89,7 @@ exits.
 ## Parse-error handling
 
 The producer parses each line through the session's cached
-[`DataFrameFormat`](data-frames.md). Malformed frames are handled by
+[`DataFrameFormat`](readings.md). Malformed frames are handled by
 the `strict` flag:
 
 - `strict=False` (default) — logs a WARN with the raw bytes and
@@ -150,7 +150,7 @@ a [`SyncStreamingSession`](../src/alicatlib/sync/device.py#L506) — a
 sync context manager and a sync iterator:
 
 ```python
-with sync_dev.stream(rate_ms=50) as stream:
+with sync_dev.stream(rate_hz=20) as stream:
     for frame in stream:
         process(frame)
 ```
@@ -176,7 +176,7 @@ Two primitives, different use cases:
 | [`StreamingSession`](../src/alicatlib/devices/streaming.py) | Device-driven; frames arrive when the device sends them | Highest rates (device's `NCS`-configured cadence), one device per port |
 | [`record()`](logging.md#recorder) | Host-driven absolute-target scheduler over `poll()` | Multi-device acquisition, cadence chosen by host, sink integration via `pipe()` |
 
-Both produce `DataFrame` values; both honour overflow policies; both
+Both produce `Reading` values; both honour overflow policies; both
 integrate with sinks (streaming via the iterator + user code;
 `record()` via `pipe()`). The streaming runtime is the right choice
 for high-rate single-device capture; `record()` is the right choice

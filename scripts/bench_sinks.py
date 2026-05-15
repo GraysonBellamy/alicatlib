@@ -47,6 +47,7 @@ from alicatlib.devices.data_frame import (
     DataFrameFormatFlavor,
     ParsedFrame,
 )
+
 from alicatlib.devices.models import StatusCode
 from alicatlib.registry import Statistic
 from alicatlib.sinks import (

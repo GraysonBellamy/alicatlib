@@ -8,8 +8,8 @@ identification results (:class:`DeviceInfo`), capability probe outcomes
 they are the full set of public models referenced by the rest of the
 package, per design doc §5.5.
 
-Data-frame models (:class:`~alicatlib.devices.data_frame.DataFrame`,
-:class:`~alicatlib.devices.data_frame.DataFrameFormat`, ...) live in
+Data-frame models (:class:`~alicatlib.devices.reading.Reading`,
+:class:`~alicatlib.devices.reading.DataFrameFormat`, ...) live in
 :mod:`alicatlib.devices.data_frame` to keep the wire-parsing machinery
 separate from the identity models that cache it.
 """
@@ -25,15 +25,17 @@ if TYPE_CHECKING:
     from datetime import date, datetime
 
     from alicatlib.commands.base import Capability
-    from alicatlib.devices.data_frame import DataFrame
     from alicatlib.devices.kind import DeviceKind
     from alicatlib.devices.medium import Medium
+    from alicatlib.devices.reading import Reading
+    from alicatlib.errors import ErrorContext
     from alicatlib.firmware import FirmwareVersion
     from alicatlib.registry._codes_gen import Statistic, Unit
     from alicatlib.registry.loop_control import LoopControlVariable
 
 __all__ = [
     "TOTALIZER_DISABLED_CODE",
+    "AlicatDeviceSnapshot",
     "AnalogOutputChannel",
     "AnalogOutputSourceSetting",
     "AutoTareState",
@@ -41,6 +43,7 @@ __all__ = [
     "BlinkDisplayState",
     "DeadbandSetting",
     "DeviceInfo",
+    "DeviceSnapshot",
     "DisplayLockResult",
     "FullScaleValue",
     "LoopControlState",
@@ -87,7 +90,7 @@ class StatusCode(StrEnum):
 
     The Alicat primer defines these as 3-letter tokens trailing the numeric
     fields when the condition is active. Multiple codes may be present
-    simultaneously (e.g. ``MOV`` + ``TMF``); :class:`alicatlib.devices.data_frame.DataFrame`
+    simultaneously (e.g. ``MOV`` + ``TMF``); :class:`alicatlib.devices.reading.Reading`
     carries them as a :class:`frozenset` so ordering on the wire doesn't
     matter downstream.
     """
@@ -161,7 +164,7 @@ def _empty_full_scale() -> dict[Statistic, FullScaleValue]:
 class MeasurementSet:
     """Result of a :class:`~alicatlib.commands.polling.RequestData` (``DV``) query.
 
-    Unlike a :class:`~alicatlib.devices.data_frame.DataFrame`, which returns
+    Unlike a :class:`~alicatlib.devices.reading.Reading`, which returns
     the cached full set of fields, a ``DV`` query targets a specific list
     of statistics (1–13 per call) and reports each with an averaging
     window. Values that come back as the ``--`` sentinel are ``None``.
@@ -233,6 +236,44 @@ class DeviceInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class DeviceSnapshot:
+    """Cross-lib status snapshot of a device.
+
+    Built by :meth:`alicatlib.devices.base.Device.snapshot` from cached
+    identity + session counters — **no I/O**. Useful for status CLIs,
+    dashboards, and healthchecks where polling the wire would be
+    overkill.
+
+    Per the cross-lib spec §H every sibling lib ships this base shape;
+    alicat adds :class:`AlicatDeviceSnapshot` for media / capabilities.
+    """
+
+    name: str
+    model: str | None
+    firmware: str | None
+    serial: str | None
+    connected: bool
+    last_error: ErrorContext | None
+    recoverable_error_count: int
+    captured_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AlicatDeviceSnapshot(DeviceSnapshot):
+    """Alicat-specific :class:`DeviceSnapshot` extras.
+
+    Adds the Alicat-native bus address, media flags, and capability
+    set. Inherits every base field from :class:`DeviceSnapshot` so
+    consumers that want only the cross-lib surface can still pattern-
+    match on the base type.
+    """
+
+    unit_id: str | None
+    media: Medium | None
+    capabilities: Capability
+
+
+@dataclass(frozen=True, slots=True)
 class SetpointState:
     """Result of a :class:`~alicatlib.commands.setpoint.Setpoint` query or set.
 
@@ -242,10 +283,10 @@ class SetpointState:
     loop closes on the new target; they track to the same value in steady
     state. ``unit`` / ``unit_label`` come straight from the same reply.
 
-    ``frame`` is optional: legacy ``S`` (set-only, pre-9v00) responds
-    with a post-op data frame rather than the 5-field LS reply, so the
-    facade can attach the parsed frame on the legacy path. On the modern
-    LS path ``frame`` is always ``None``.
+    ``reading`` is optional: legacy ``S`` (set-only, pre-9v00) responds
+    with a post-op data reading rather than the 5-field LS reply, so the
+    facade can attach the parsed reading on the legacy path. On the
+    modern LS path ``reading`` is always ``None``.
     """
 
     unit_id: str
@@ -253,19 +294,20 @@ class SetpointState:
     requested: float
     unit: Unit | None
     unit_label: str | None
-    frame: DataFrame | None = None
+    reading: Reading | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class TareResult:
     """Result of a tare command (flow / gauge pressure / absolute pressure).
 
-    The device responds with a post-tare data frame; that frame is the
-    most useful artifact (it reports the new zero-referenced reading),
-    so the result surface is intentionally minimal: just the frame.
+    The device responds with a post-tare data reading; that reading is
+    the most useful artifact (it reports the new zero-referenced
+    measurement), so the result surface is intentionally minimal: just
+    the reading.
     """
 
-    frame: DataFrame
+    reading: Reading
 
 
 @dataclass(frozen=True, slots=True)
@@ -318,20 +360,20 @@ class AutoTareState:
 class ValveHoldResult:
     """Result of a valve-hold command (``HP`` / ``HC`` / ``C``).
 
-    All three commands respond with a post-op data frame; the
-    discriminator is whether :attr:`DataFrame.status` carries
+    All three commands respond with a post-op data reading; the
+    discriminator is whether :attr:`Reading.status` carries
     :attr:`StatusCode.HLD`. :attr:`held` captures that for convenience
     — ``True`` after ``HP`` or ``HC``, ``False`` after ``C``.
 
     Per design §9 Tier-2 controller scope.
     """
 
-    frame: DataFrame
+    reading: Reading
 
     @property
     def held(self) -> bool:
-        """``True`` if the post-op frame reports :attr:`StatusCode.HLD`."""
-        return StatusCode.HLD in self.frame.status
+        """``True`` if the post-op reading reports :attr:`StatusCode.HLD`."""
+        return StatusCode.HLD in self.reading.status
 
 
 @dataclass(frozen=True, slots=True)
@@ -552,17 +594,17 @@ class BlinkDisplayState:
 class DisplayLockResult:
     """Result of an ``L`` / ``U`` (lock / unlock display) command.
 
-    Both commands respond with a data frame — ``L`` sets the
+    Both commands respond with a data reading — ``L`` sets the
     :attr:`StatusCode.LCK` bit, ``U`` clears it. :attr:`locked`
     exposes that for convenience.
     """
 
-    frame: DataFrame
+    reading: Reading
 
     @property
     def locked(self) -> bool:
-        """``True`` if the post-op frame reports :attr:`StatusCode.LCK`."""
-        return StatusCode.LCK in self.frame.status
+        """``True`` if the post-op reading reports :attr:`StatusCode.LCK`."""
+        return StatusCode.LCK in self.reading.status
 
 
 @dataclass(frozen=True, slots=True)
@@ -680,15 +722,15 @@ class TotalizerConfig:
 
 @dataclass(frozen=True, slots=True)
 class TotalizerResetResult:
-    """Wraps the post-op data frame from ``T <n>`` or ``TP <n>``.
+    """Wraps the post-op data reading from ``T <n>`` or ``TP <n>``.
 
-    The frame is the useful artifact (it carries the fresh totalizer
-    reading); the result object exists so a future addition (observed
-    totalizer reading extracted from the frame, timing, …) has a
-    stable home.
+    The reading is the useful artifact (it carries the fresh totalizer
+    measurement); the result object exists so a future addition
+    (observed totalizer reading extracted from the reading, timing, …)
+    has a stable home.
     """
 
-    frame: DataFrame
+    reading: Reading
 
 
 @dataclass(frozen=True, slots=True)

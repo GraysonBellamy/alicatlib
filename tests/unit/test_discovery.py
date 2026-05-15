@@ -29,7 +29,7 @@ from alicatlib.devices.discovery import (
 from alicatlib.devices.models import DeviceInfo
 from alicatlib.errors import AlicatTimeoutError
 from alicatlib.firmware import FirmwareVersion
-from alicatlib.protocol import AlicatProtocolClient
+from alicatlib.protocol import AlicatProtocolClient, ProtocolKind
 from alicatlib.transport import FakeTransport
 
 if TYPE_CHECKING:
@@ -108,30 +108,36 @@ class TestDiscoveryResult:
     def test_ok_when_info_populated(self) -> None:
         res = DiscoveryResult(
             port="/dev/ttyUSB0",
-            unit_id="A",
+            address="A",
             baudrate=19200,
-            info=_fake_info(),
+            device_info=_fake_info(),
             error=None,
+            protocol=ProtocolKind.ASCII,
+            elapsed_s=0.0,
         )
         assert res.ok is True
 
     def test_not_ok_when_error_populated(self) -> None:
         res = DiscoveryResult(
             port="/dev/ttyUSB0",
-            unit_id="A",
+            address="A",
             baudrate=19200,
-            info=None,
+            device_info=None,
             error=AlicatTimeoutError("timed out"),
+            protocol=ProtocolKind.ASCII,
+            elapsed_s=0.0,
         )
         assert res.ok is False
 
     def test_is_frozen(self) -> None:
         res = DiscoveryResult(
             port="/dev/ttyUSB0",
-            unit_id="A",
+            address="A",
             baudrate=19200,
-            info=None,
+            device_info=None,
             error=None,
+            protocol=ProtocolKind.ASCII,
+            elapsed_s=0.0,
         )
         with pytest.raises(FrozenInstanceError):
             res.port = "other"  # type: ignore[misc]
@@ -169,10 +175,10 @@ class TestProbeWithClient:
             baudrate=19200,
         )
         assert result.ok
-        assert result.info is not None
-        assert result.info.model == "MC-100SCCM-D"
+        assert result.device_info is not None
+        assert result.device_info.model == "MC-100SCCM-D"
         assert result.port == "/dev/ttyUSB0"
-        assert result.unit_id == "A"
+        assert result.address == "A"
         assert result.baudrate == 19200
 
     @pytest.mark.anyio
@@ -194,7 +200,7 @@ class TestProbeWithClient:
         )
         assert not result.ok
         assert result.error is not None
-        assert result.info is None
+        assert result.device_info is None
 
     @pytest.mark.anyio
     async def test_gp_without_model_hint_errors(self) -> None:
@@ -227,7 +233,7 @@ class TestProbeWithClient:
             baudrate=115200,
         )
         assert result.port == "/dev/ttyUSB1"
-        assert result.unit_id == "B"
+        assert result.address == "B"
         assert result.baudrate == 115200
 
 
@@ -256,10 +262,12 @@ class TestFindDevices:
             calls.append((port, unit_id, baudrate))
             return DiscoveryResult(
                 port=port,
-                unit_id=unit_id,
+                address=unit_id,
                 baudrate=baudrate,
-                info=_fake_info(),
+                device_info=_fake_info(),
                 error=None,
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
             )
 
         monkeypatch.setattr(discovery, "probe", fake_probe)
@@ -305,10 +313,12 @@ class TestFindDevices:
             del timeout
             return DiscoveryResult(
                 port=port,
-                unit_id=unit_id,
+                address=unit_id,
                 baudrate=baudrate,
-                info=None,
+                device_info=None,
                 error=None,
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
             )
 
         monkeypatch.setattr(discovery, "probe", fake_probe)
@@ -329,7 +339,7 @@ class TestFindDevices:
             ("/dev/ttyUSB1", "B", 19200),
             ("/dev/ttyUSB1", "B", 115200),
         ]
-        actual_order = [(r.port, r.unit_id, r.baudrate) for r in results]
+        actual_order = [(r.port, r.address, r.baudrate) for r in results]
         assert actual_order == expected_order
 
     @pytest.mark.anyio
@@ -366,10 +376,12 @@ class TestFindDevices:
             del timeout
             return DiscoveryResult(
                 port=port,
-                unit_id=unit_id,
+                address=unit_id,
                 baudrate=baudrate,
-                info=None,
+                device_info=None,
                 error=None,
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
             )
 
         monkeypatch.setattr(discovery, "list_serial_ports", fake_list)
@@ -406,10 +418,12 @@ class TestFindDevices:
             in_flight -= 1
             return DiscoveryResult(
                 port=port,
-                unit_id=unit_id,
+                address=unit_id,
                 baudrate=baudrate,
-                info=None,
+                device_info=None,
                 error=None,
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
             )
 
         monkeypatch.setattr(discovery, "probe", fake_probe)
@@ -457,10 +471,12 @@ class TestFindDevices:
             in_flight_per_port[port] -= 1
             return DiscoveryResult(
                 port=port,
-                unit_id="A",
+                address="A",
                 baudrate=baudrate,
-                info=None,
+                device_info=None,
                 error=None,
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
             )
 
         monkeypatch.setattr(discovery, "probe", fake_probe)
@@ -502,10 +518,12 @@ class TestFindDevices:
             in_flight -= 1
             return DiscoveryResult(
                 port=port,
-                unit_id="A",
+                address="A",
                 baudrate=baudrate,
-                info=None,
+                device_info=None,
                 error=None,
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
             )
 
         monkeypatch.setattr(discovery, "probe", fake_probe)
@@ -546,10 +564,12 @@ class TestFindDevices:
             calls.append((port, unit_id, baudrate))
             return DiscoveryResult(
                 port=port,
-                unit_id=unit_id,
+                address=unit_id,
                 baudrate=baudrate,
-                info=_fake_info(),
+                device_info=_fake_info(),
                 error=None,
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
             )
 
         monkeypatch.setattr(discovery, "probe", fake_probe)
@@ -595,10 +615,12 @@ class TestFindDevices:
             calls.append((port, unit_id, baudrate))
             return DiscoveryResult(
                 port=port,
-                unit_id=unit_id,
+                address=unit_id,
                 baudrate=baudrate,
-                info=_fake_info(),
+                device_info=_fake_info(),
                 error=None,
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
             )
 
         monkeypatch.setattr(discovery, "probe", fake_probe)
@@ -637,10 +659,12 @@ class TestFindDevices:
             calls.append((port, unit_id, baudrate))
             return DiscoveryResult(
                 port=port,
-                unit_id=unit_id,
+                address=unit_id,
                 baudrate=baudrate,
-                info=_fake_info(),
+                device_info=_fake_info(),
                 error=None,
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
             )
 
         monkeypatch.setattr(discovery, "probe", fake_probe)
@@ -670,17 +694,21 @@ class TestFindDevices:
             if port == "/dev/ttyUSB1":
                 return DiscoveryResult(
                     port=port,
-                    unit_id=unit_id,
+                    address=unit_id,
                     baudrate=baudrate,
-                    info=None,
+                    device_info=None,
                     error=AlicatTimeoutError("no reply"),
+                    protocol=ProtocolKind.ASCII,
+                    elapsed_s=0.0,
                 )
             return DiscoveryResult(
                 port=port,
-                unit_id=unit_id,
+                address=unit_id,
                 baudrate=baudrate,
-                info=_fake_info(),
+                device_info=_fake_info(),
                 error=None,
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
             )
 
         monkeypatch.setattr(discovery, "probe", flaky_probe)

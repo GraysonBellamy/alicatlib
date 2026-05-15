@@ -83,8 +83,8 @@ from alicatlib.transport.serial import SerialTransport
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from alicatlib.devices.data_frame import DataFrameField, DataFrameFormat
     from alicatlib.devices.models import FullScaleValue
+    from alicatlib.devices.reading import DataFrameField, DataFrameFormat
     from alicatlib.registry import Statistic, Unit
     from alicatlib.transport.base import Transport
 

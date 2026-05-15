@@ -131,7 +131,7 @@ design §5.9:
    silently hitting the device.
 6. **`??D*`.** Data-frame format cached on the `Session`. `DCU` and
    `FPF` sweeps bind units and full-scale ranges per numeric field
-   (see [Data frames](data-frames.md)).
+   (see [Data frames](readings.md)).
 7. **Model-rule dispatch.** Factory picks the correct facade subclass.
 
 ## Escape hatches

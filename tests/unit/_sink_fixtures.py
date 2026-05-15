@@ -11,14 +11,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from alicatlib.devices.data_frame import (
-    DataFrame,
+from alicatlib.devices.models import StatusCode
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
     ParsedFrame,
+    Reading,
 )
-from alicatlib.devices.models import StatusCode
 from alicatlib.registry import Statistic
 from alicatlib.streaming.sample import Sample
 
@@ -62,19 +62,19 @@ def make_sample(
         values_by_statistic={Statistic.MASS_FLOW: value},
         status=frozenset[StatusCode](),
     )
-    frame = DataFrame.from_parsed(
+    frame = Reading.from_parsed(
         parsed,
-        format=fmt,
+        reading_format=fmt,
         received_at=when,
-        monotonic_ns=1000,
+        t_mono_ns=1000,
     )
     return Sample(
         device=device,
         unit_id=unit_id,
-        monotonic_ns=1000,
+        t_mono_ns=1000,
         requested_at=when,
         received_at=when + timedelta(milliseconds=5),
-        midpoint_at=when + timedelta(milliseconds=2),
+        t_utc=when + timedelta(milliseconds=2),
         latency_s=0.005,
-        frame=frame,
+        reading=frame,
     )

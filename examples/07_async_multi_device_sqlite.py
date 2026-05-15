@@ -33,10 +33,10 @@ async def main() -> None:
         await mgr.add("air", port2, serial=SerialSettings(port=port2, baudrate=baud))
 
         async with (
-            record(mgr, rate_hz=20.0, duration=30.0) as stream,
+            record(mgr, rate_hz=20.0, duration=30.0) as recording,
             SqliteSink(db_path) as sink,
         ):
-            summary = await pipe(stream, sink)
+            summary = await pipe(recording, sink)
 
     print(f"wrote {db_path}")
     print(f"  samples_emitted: {summary.samples_emitted}")

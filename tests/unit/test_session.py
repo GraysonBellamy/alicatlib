@@ -54,7 +54,7 @@ from tests._typing import approx
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from alicatlib.devices.data_frame import DataFrameFormat
+    from alicatlib.devices.reading import DataFrameFormat
     from alicatlib.transport.fake import ScriptedReply
 
 

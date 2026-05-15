@@ -22,14 +22,14 @@ from typing import TYPE_CHECKING
 import anyio
 import pytest
 
-from alicatlib.devices.data_frame import (
-    DataFrame,
+from alicatlib.devices.models import StatusCode
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
     ParsedFrame,
+    Reading,
 )
-from alicatlib.devices.models import StatusCode
 from alicatlib.registry import Statistic
 from alicatlib.sinks import (
     CsvSink,
@@ -83,7 +83,7 @@ def _frame(
     field_name: str = "Mass_Flow",
     value: float = 12.5,
     at: datetime | None = None,
-) -> DataFrame:
+) -> Reading:
     fmt = _format(field_name)
     parsed = ParsedFrame(
         unit_id=unit_id,
@@ -92,7 +92,7 @@ def _frame(
         status=frozenset[StatusCode](),
     )
     when = at if at is not None else datetime.now(UTC)
-    return DataFrame.from_parsed(parsed, format=fmt, received_at=when, monotonic_ns=1000)
+    return Reading.from_parsed(parsed, reading_format=fmt, received_at=when, t_mono_ns=1000)
 
 
 def _sample(
@@ -106,12 +106,12 @@ def _sample(
     return Sample(
         device=device,
         unit_id=unit_id,
-        monotonic_ns=1000,
+        t_mono_ns=1000,
         requested_at=when,
         received_at=when + timedelta(milliseconds=5),
-        midpoint_at=when + timedelta(milliseconds=2),
+        t_utc=when + timedelta(milliseconds=2),
         latency_s=0.005,
-        frame=_frame(unit_id=unit_id, field_name=field_name, value=value, at=when),
+        reading=_frame(unit_id=unit_id, field_name=field_name, value=value, at=when),
     )
 
 
@@ -140,9 +140,10 @@ class TestSampleToRow:
         expected_keys = {
             "device",
             "unit_id",
+            "t_utc",
+            "t_mono_ns",
             "requested_at",
             "received_at",
-            "midpoint_at",
             "latency_s",
             "Mass_Flow",
             "status",
@@ -156,7 +157,7 @@ class TestSampleToRow:
         row = sample_to_row(sample)
         # The sample's received_at is 5 ms later than the frame's.
         assert row["received_at"] == sample.received_at.isoformat()
-        assert row["received_at"] != sample.frame.received_at.isoformat()
+        assert row["received_at"] != sample.reading.received_at.isoformat()
 
     def test_empty_status_is_empty_string(self) -> None:
         row = sample_to_row(_sample())
@@ -177,14 +178,14 @@ class TestSampleToRow:
         """
         from datetime import UTC, datetime, timedelta
 
-        from alicatlib.devices.data_frame import (
-            DataFrame,
+        from alicatlib.devices.models import StatusCode
+        from alicatlib.devices.reading import (
             DataFrameField,
             DataFrameFormat,
             DataFrameFormatFlavor,
             ParsedFrame,
+            Reading,
         )
-        from alicatlib.devices.models import StatusCode
         from alicatlib.registry import Statistic
         from alicatlib.streaming.sample import Sample
 
@@ -224,16 +225,16 @@ class TestSampleToRow:
             values_by_statistic={Statistic.MASS_FLOW: 12.5},
             status=frozenset[StatusCode](),
         )
-        frame = DataFrame.from_parsed(parsed, format=fmt, received_at=when, monotonic_ns=1)
+        frame = Reading.from_parsed(parsed, reading_format=fmt, received_at=when, t_mono_ns=1)
         sample = Sample(
             device="primary",
             unit_id="A",
-            monotonic_ns=1,
+            t_mono_ns=1,
             requested_at=when,
             received_at=when + timedelta(milliseconds=5),
-            midpoint_at=when + timedelta(milliseconds=2),
+            t_utc=when + timedelta(milliseconds=2),
             latency_s=0.005,
-            frame=frame,
+            reading=frame,
         )
 
         row = sample_to_row(sample)
@@ -269,7 +270,7 @@ class TestInMemorySink:
             await sink.write_many([_sample(device="a", value=1.0)])
             await sink.write_many([_sample(device="b", value=2.0), _sample(device="c", value=3.0)])
             assert [s.device for s in sink.samples] == ["a", "b", "c"]
-            assert [s.frame.values["Mass_Flow"] for s in sink.samples] == [1.0, 2.0, 3.0]
+            assert [s.reading.values["Mass_Flow"] for s in sink.samples] == [1.0, 2.0, 3.0]
 
     @pytest.mark.anyio
     async def test_close_preserves_buffer(self) -> None:
@@ -436,7 +437,7 @@ class TestPipe:
             summary = await pipe(aiter(stream), sink, batch_size=1)
         assert isinstance(summary, AcquisitionSummary)
         assert summary.samples_emitted == 3
-        assert [s.frame.values["Mass_Flow"] for s in sink.samples] == [1.0, 2.0, 3.0]
+        assert [s.reading.values["Mass_Flow"] for s in sink.samples] == [1.0, 2.0, 3.0]
 
     @pytest.mark.anyio
     async def test_final_flush_drains_partial_buffer(self) -> None:

@@ -52,9 +52,9 @@ if TYPE_CHECKING:
 
     from alicatlib.commands import Command, GasState
     from alicatlib.devices.base import Device
-    from alicatlib.devices.data_frame import DataFrame
     from alicatlib.devices.medium import Medium
     from alicatlib.devices.models import (
+        AlicatDeviceSnapshot,
         AnalogOutputChannel,
         AnalogOutputSourceSetting,
         AutoTareState,
@@ -86,6 +86,7 @@ if TYPE_CHECKING:
         ValveHoldResult,
         ZeroBandSetting,
     )
+    from alicatlib.devices.reading import Reading
     from alicatlib.devices.session import Session
     from alicatlib.devices.streaming import OverflowPolicy, StreamingSession
     from alicatlib.protocol import AlicatProtocolClient
@@ -141,9 +142,15 @@ class SyncDevice:
         """The :class:`SyncPortal` this device runs its coroutines on."""
         return self._portal
 
+    # --------------------------------------------------------------- snapshot
+
+    def snapshot(self) -> AlicatDeviceSnapshot:
+        """Blocking :meth:`Device.snapshot` — no I/O."""
+        return self._portal.call(self._dev.snapshot)
+
     # --------------------------------------------------------------- polling
 
-    def poll(self) -> DataFrame:
+    def poll(self) -> Reading:
         """Blocking :meth:`Device.poll`."""
         return self._portal.call(self._dev.poll)
 
@@ -342,7 +349,7 @@ class SyncDevice:
     def stream(
         self,
         *,
-        rate_ms: int | None = None,
+        rate_hz: float | None = None,
         strict: bool = False,
         overflow: OverflowPolicy | None = None,
         buffer_size: int = 256,
@@ -352,12 +359,12 @@ class SyncDevice:
         The returned :class:`SyncStreamingSession` is both a sync
         context manager and a sync iterator; use it as::
 
-            with sync_dev.stream(rate_ms=50) as stream:
+            with sync_dev.stream(rate_hz=20) as stream:
                 for frame in stream:
                     process(frame)
         """
         async_stream = self._dev.stream(
-            rate_ms=rate_ms,
+            rate_hz=rate_hz,
             strict=strict,
             overflow=overflow,
             buffer_size=buffer_size,
@@ -567,7 +574,7 @@ class SyncStreamingSession:
     def __iter__(self) -> Self:
         return self
 
-    def __next__(self) -> DataFrame:
+    def __next__(self) -> Reading:
         """Block until the next frame, or :class:`StopIteration` on close."""
         try:
             return self._portal.call(self._async.__anext__)

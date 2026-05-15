@@ -27,8 +27,8 @@ from alicatlib.commands import (
 from alicatlib.commands.base import DecodeContext
 from alicatlib.commands.system import MIN_FIRMWARE_MANUFACTURING_INFO
 from alicatlib.devices import DeviceKind
-from alicatlib.devices.data_frame import DataFrameFormat
 from alicatlib.devices.models import ManufacturingInfo
+from alicatlib.devices.reading import DataFrameFormat
 from alicatlib.firmware import FirmwareFamily, FirmwareVersion
 
 

@@ -26,8 +26,8 @@ precondition at call-time so the expectation is in the record (§5.18
 pt 6).
 
 All three respond with a post-op data frame — the encoder returns a
-:class:`~alicatlib.devices.data_frame.ParsedFrame`; the facade wraps
-into a :class:`DataFrame` with timing captured at the session layer
+:class:`~alicatlib.devices.reading.ParsedFrame`; the facade wraps
+into a :class:`Reading` with timing captured at the session layer
 (mirrors the pattern used by :data:`GAS_SELECT_LEGACY`).
 
 Design reference: ``docs/design.md`` §5.4 (command pattern), §5.20
@@ -51,7 +51,7 @@ from alicatlib.firmware import FirmwareFamily, FirmwareVersion
 from alicatlib.protocol.parser import parse_bool_code, parse_fields, parse_float
 
 if TYPE_CHECKING:
-    from alicatlib.devices.data_frame import ParsedFrame
+    from alicatlib.devices.reading import ParsedFrame
 
 __all__ = [
     "AUTO_TARE",
@@ -122,7 +122,7 @@ def _decode_tare_frame(
     Mirrors :meth:`GasSelectLegacy.decode` — tare responses are data
     frames, so the session must have cached ``??D*`` before dispatch.
     The facade wraps the returned :class:`ParsedFrame` in a
-    :class:`DataFrame` with read-site timing captured at the facade
+    :class:`Reading` with read-site timing captured at the facade
     layer.
     """
     if isinstance(response, tuple):

@@ -24,8 +24,8 @@ from alicatlib.devices.medium import Medium
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from alicatlib.devices.data_frame import DataFrameFormat
     from alicatlib.devices.kind import DeviceKind
+    from alicatlib.devices.reading import DataFrameFormat
     from alicatlib.firmware import FirmwareFamily, FirmwareVersion
 
 __all__ = [

@@ -18,7 +18,7 @@ from alicatlib.commands import (
     GasListRequest,
     GasSelectLegacyRequest,
 )
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,

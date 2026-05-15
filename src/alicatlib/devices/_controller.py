@@ -56,7 +56,6 @@ from alicatlib.commands import (
 )
 from alicatlib.commands._firmware_cutoffs import uses_modern_setpoint
 from alicatlib.devices.base import Device
-from alicatlib.devices.data_frame import DataFrame
 from alicatlib.devices.models import (
     AutoTareState,
     DeadbandSetting,
@@ -67,6 +66,7 @@ from alicatlib.devices.models import (
     ValveDriveState,
     ValveHoldResult,
 )
+from alicatlib.devices.reading import Reading
 from alicatlib.errors import (
     AlicatUnsupportedCommandError,
     AlicatValidationError,
@@ -76,7 +76,7 @@ from alicatlib.registry import Statistic
 
 if TYPE_CHECKING:
     from alicatlib.commands import Command
-    from alicatlib.devices.data_frame import DataFrameField, ParsedFrame
+    from alicatlib.devices.reading import DataFrameField, ParsedFrame
     from alicatlib.registry import LoopControlVariable, Unit
 
 __all__ = ["_ControllerMixin"]
@@ -228,11 +228,11 @@ class _ControllerMixin(Device):
         fmt = self._session.data_frame_format
         if fmt is None:
             fmt = await self._session.refresh_data_frame_format()
-        frame = DataFrame.from_parsed(
+        frame = Reading.from_parsed(
             parsed,
-            format=fmt,
+            reading_format=fmt,
             received_at=datetime.now(UTC),
-            monotonic_ns=monotonic_ns(),
+            t_mono_ns=monotonic_ns(),
         )
         return _build_setpoint_state(frame)
 
@@ -403,11 +403,11 @@ class _ControllerMixin(Device):
             fmt = await self._session.refresh_data_frame_format()
         parsed = await self._session.execute(command, request)
         return ValveHoldResult(
-            frame=DataFrame.from_parsed(
+            reading=Reading.from_parsed(
                 parsed,
-                format=fmt,
+                reading_format=fmt,
                 received_at=datetime.now(UTC),
-                monotonic_ns=monotonic_ns(),
+                t_mono_ns=monotonic_ns(),
             ),
         )
 
@@ -621,7 +621,7 @@ class _ControllerMixin(Device):
             )
 
 
-def _build_setpoint_state(frame: DataFrame) -> SetpointState:
+def _build_setpoint_state(frame: Reading) -> SetpointState:
     """Extract setpoint info from a legacy-path post-op data frame.
 
     Only the legacy ``S`` path goes through here — the modern ``LS``
@@ -664,11 +664,11 @@ def _build_setpoint_state(frame: DataFrame) -> SetpointState:
         requested=setpoint_float,
         unit=unit,
         unit_label=unit_label,
-        frame=frame,
+        reading=frame,
     )
 
 
-def _find_setpoint_field(frame: DataFrame) -> DataFrameField | None:
+def _find_setpoint_field(frame: Reading) -> DataFrameField | None:
     """Locate the :class:`DataFrameField` for the active setpoint column.
 
     Searches in this order:
@@ -685,10 +685,10 @@ def _find_setpoint_field(frame: DataFrame) -> DataFrameField | None:
     statistic-based lookup was necessary to make legacy ``S``
     setpoint writes decode on real hardware.
     """
-    for candidate in frame.format.fields:
+    for candidate in frame.reading_format.fields:
         if candidate.statistic in _SETPOINT_STATISTICS:
             return candidate
-    for candidate in frame.format.fields:
+    for candidate in frame.reading_format.fields:
         if candidate.name == _SETPOINT_FIELD_NAME:
             return candidate
     return None

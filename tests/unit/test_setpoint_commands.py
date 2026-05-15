@@ -19,7 +19,7 @@ from alicatlib.commands import (
     SetpointRequest,
     SetpointSourceRequest,
 )
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
@@ -123,7 +123,7 @@ class TestSetpointDecode:
         assert state.current == 78.94
         assert state.requested == 78.94
         assert state.unit_label == "SCCM"
-        assert state.frame is None
+        assert state.reading is None
 
     def test_parses_settling_state(self, ctx_v10_with_format: DecodeContext) -> None:
         """Right after a SET the loop hasn't settled — current lags requested."""

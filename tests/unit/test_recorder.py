@@ -26,14 +26,14 @@ import pytest
 
 from alicatlib.commands import Capability
 from alicatlib.devices import DeviceKind, Medium
-from alicatlib.devices.data_frame import (
-    DataFrame,
+from alicatlib.devices.models import DeviceInfo, StatusCode
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
     ParsedFrame,
+    Reading,
 )
-from alicatlib.devices.models import DeviceInfo, StatusCode
 from alicatlib.errors import AlicatError, ErrorContext
 from alicatlib.firmware import FirmwareVersion
 from alicatlib.manager import DeviceResult
@@ -85,8 +85,8 @@ def _frame(
     unit_id: str = "A",
     mass_flow: float = 1.0,
     tick: int = 0,
-) -> DataFrame:
-    """Construct a synthetic :class:`DataFrame` with a caller-chosen value.
+) -> Reading:
+    """Construct a synthetic :class:`Reading` with a caller-chosen value.
 
     ``tick`` is only used to vary ``monotonic_ns`` across samples so
     tests asserting on provenance can tell consecutive frames apart.
@@ -100,11 +100,11 @@ def _frame(
     )
     from datetime import UTC, datetime
 
-    return DataFrame.from_parsed(
+    return Reading.from_parsed(
         parsed,
-        format=fmt,
+        reading_format=fmt,
         received_at=datetime.now(UTC),
-        monotonic_ns=1_000_000 * tick,
+        t_mono_ns=1_000_000 * tick,
     )
 
 
@@ -145,13 +145,13 @@ class _StubPoll:
     async def poll(
         self,
         names: Sequence[str] | None = None,
-    ) -> Mapping[str, DeviceResult[DataFrame]]:
+    ) -> Mapping[str, DeviceResult[Reading]]:
         self.calls += 1
         self.names_seen.append(names)
         if self._poll_latency > 0:
             await anyio.sleep(self._poll_latency)
         target = list(names) if names is not None else list(self._device_names)
-        results: dict[str, DeviceResult[DataFrame]] = {}
+        results: dict[str, DeviceResult[Reading]] = {}
         for n in target:
             if n == self._fail_device:
                 err = AlicatError("synthetic", context=ErrorContext(command_name="poll_data"))
@@ -224,10 +224,10 @@ class TestRecordHappyPath:
                 assert sample.device == "dev0"
                 assert sample.unit_id == "A"
                 assert sample.received_at >= sample.requested_at
-                assert sample.midpoint_at >= sample.requested_at
-                assert sample.midpoint_at <= sample.received_at
+                assert sample.t_utc >= sample.requested_at
+                assert sample.t_utc <= sample.received_at
                 assert sample.latency_s >= 0.0
-                assert sample.frame.values["Mass_Flow"] == approx(1.0)
+                assert sample.reading.values["Mass_Flow"] == approx(1.0)
                 break
 
     @pytest.mark.anyio

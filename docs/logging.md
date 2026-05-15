@@ -38,8 +38,8 @@ Key properties (design §5.14):
   `break`, exception, or natural stream end) cancels and joins the
   producer before `record()` returns.
 - **Wall-clock provenance.** Each `Sample` carries
-  `requested_at` / `received_at` / `midpoint_at` (all UTC
-  `datetime`) plus a `monotonic_ns` for drift analysis and a
+  `requested_at` / `received_at` / `t_utc` (all UTC
+  `datetime`) plus a `t_mono_ns` for drift analysis and a
   `latency_s` precomputed for convenience.
 
 ### Backpressure
@@ -93,9 +93,9 @@ row shape via `sample_to_row`:
 | --- | --- |
 | `device` | `Sample.device` — manager-assigned name |
 | `unit_id` | `Sample.unit_id` — bus letter |
-| `requested_at` / `received_at` / `midpoint_at` | `Sample.*` wall-clock ISO 8601 |
+| `requested_at` / `received_at` / `t_utc` | `Sample.*` wall-clock ISO 8601 |
 | `latency_s` | `Sample.latency_s` |
-| *frame fields* | `DataFrame.as_dict()` minus its own `received_at` (sample-level wins) |
+| *frame fields* | `Reading.as_dict()` minus its own `received_at` (sample-level wins) |
 | `status` | Comma-joined sorted status codes from the data frame |
 
 The frame's own `received_at` is dropped so every row's

@@ -1,4 +1,4 @@
-"""Tests for :mod:`alicatlib.devices.data_frame`.
+"""Tests for :mod:`alicatlib.devices.reading`.
 
 The parse path is the only non-trivial logic in this module; it has to
 round-trip required fields positionally, peel off status-code tails,
@@ -13,14 +13,14 @@ from datetime import UTC, datetime
 
 import pytest
 
-from alicatlib.devices.data_frame import (
-    DataFrame,
+from alicatlib.devices.models import StatusCode
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
     ParsedFrame,
+    Reading,
 )
-from alicatlib.devices.models import StatusCode
 from alicatlib.errors import AlicatParseError
 from alicatlib.protocol.parser import parse_float, parse_optional_float
 from alicatlib.registry._codes_gen import Statistic, Unit
@@ -276,26 +276,26 @@ class TestParseErrors:
 
 
 # ---------------------------------------------------------------------------
-# DataFrame (timing wrapper)
+# Reading (timing wrapper)
 # ---------------------------------------------------------------------------
 
 
 class TestDataFrame:
-    def _fixture(self) -> DataFrame:
+    def _fixture(self) -> Reading:
         fmt = _sample_format()
         parsed = fmt.parse(b"A 14.70 25.5 50.0")
-        return DataFrame.from_parsed(
+        return Reading.from_parsed(
             parsed,
-            format=fmt,
+            reading_format=fmt,
             received_at=datetime(2026, 4, 16, 12, 0, 0, tzinfo=UTC),
-            monotonic_ns=123_456_789,
+            t_mono_ns=123_456_789,
         )
 
     def test_from_parsed_preserves_values(self) -> None:
         df = self._fixture()
         assert df.unit_id == "A"
         assert df.values["Mass_Flow"] == approx(25.5)
-        assert df.monotonic_ns == 123_456_789
+        assert df.t_mono_ns == 123_456_789
 
     def test_get_float_on_numeric_field(self) -> None:
         df = self._fixture()
@@ -330,11 +330,11 @@ class TestDataFrame:
         """Schema-stable: status column always present, deterministic order."""
         fmt = _sample_format_with_conditional()
         parsed = fmt.parse(b"A 25.5 N2 MOV HLD")
-        df = DataFrame.from_parsed(
+        df = Reading.from_parsed(
             parsed,
-            format=fmt,
+            reading_format=fmt,
             received_at=datetime(2026, 4, 16, tzinfo=UTC),
-            monotonic_ns=0,
+            t_mono_ns=0,
         )
         result = df.as_dict()
         assert result["status"] == "HLD,MOV"

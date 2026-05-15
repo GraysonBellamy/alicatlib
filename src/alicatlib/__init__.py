@@ -26,6 +26,8 @@ from alicatlib.devices.discovery import (
     probe,
 )
 from alicatlib.devices.factory import open_device
+from alicatlib.devices.models import AlicatDeviceSnapshot, DeviceSnapshot
+from alicatlib.devices.reading import Reading
 from alicatlib.errors import (
     AlicatCapabilityError,
     AlicatCommandRejectedError,
@@ -57,16 +59,30 @@ from alicatlib.errors import (
 )
 from alicatlib.firmware import FirmwareVersion
 from alicatlib.manager import AlicatManager, DeviceResult, ErrorPolicy
+from alicatlib.protocol import ProtocolKind
 from alicatlib.registry import Gas, LoopControlVariable, Statistic, Unit
+from alicatlib.sinks.base import sample_to_row
+from alicatlib.streaming import (
+    AcquisitionSummary,
+    OverflowPolicy,
+    PollSource,
+    PollSourceAdapter,
+    Recording,
+    Sample,
+    record,
+)
+from alicatlib.units import to_pint
 from alicatlib.version import __version__
 
 __all__ = [
     "DEFAULT_DISCOVERY_BAUDRATES",
+    "AcquisitionSummary",
     "AlicatCapabilityError",
     "AlicatCommandRejectedError",
     "AlicatConfig",
     "AlicatConfigurationError",
     "AlicatConnectionError",
+    "AlicatDeviceSnapshot",
     "AlicatDiscoveryError",
     "AlicatError",
     "AlicatFirmwareError",
@@ -87,6 +103,7 @@ __all__ = [
     "AlicatValidationError",
     "DeviceKind",
     "DeviceResult",
+    "DeviceSnapshot",
     "DiscoveryResult",
     "ErrorContext",
     "ErrorPolicy",
@@ -95,6 +112,13 @@ __all__ = [
     "InvalidUnitIdError",
     "LoopControlVariable",
     "Medium",
+    "OverflowPolicy",
+    "PollSource",
+    "PollSourceAdapter",
+    "ProtocolKind",
+    "Reading",
+    "Recording",
+    "Sample",
     "Statistic",
     "Unit",
     "UnknownFluidError",
@@ -107,4 +131,7 @@ __all__ = [
     "list_serial_ports",
     "open_device",
     "probe",
+    "record",
+    "sample_to_row",
+    "to_pint",
 ]

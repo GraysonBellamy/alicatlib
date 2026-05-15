@@ -22,14 +22,14 @@ import pytest
 
 from alicatlib.commands import Capability
 from alicatlib.devices import DeviceKind, Medium
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.factory import probe_capabilities
+from alicatlib.devices.flow_controller import FlowController
+from alicatlib.devices.models import DeviceInfo
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
 )
-from alicatlib.devices.factory import probe_capabilities
-from alicatlib.devices.flow_controller import FlowController
-from alicatlib.devices.models import DeviceInfo
 from alicatlib.devices.session import Session
 from alicatlib.firmware import FirmwareFamily, FirmwareVersion
 from alicatlib.protocol import AlicatProtocolClient

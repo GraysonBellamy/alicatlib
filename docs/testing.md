@@ -189,7 +189,7 @@ in that case, the commit message must document the re-transcription).
 
 | Layer | Primary test strategy |
 | --- | --- |
-| Parsers (`protocol/parser.py`, `devices/data_frame.py`) | Pure-function unit tests against raw fixture bytes. Clock-free; no `FakeTransport` needed. |
+| Parsers (`protocol/parser.py`, `devices/reading.py`) | Pure-function unit tests against raw fixture bytes. Clock-free; no `FakeTransport` needed. |
 | Commands (`commands/*`) | `encode` / `decode` round-trip against fixture replies; one test per spec covers the happy path and each gate. |
 | Session gates | `FakeTransport` + `Session.execute`; assert the right typed exception and zero tx when a gate fires. |
 | Factory + discovery | `FakeTransportFromFixture` against captured identification traces. |

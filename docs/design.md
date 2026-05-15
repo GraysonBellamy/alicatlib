@@ -79,7 +79,7 @@ fluid-select behavior is verified on hardware.
 5. **Maintainability.** Favor typed models, small modules, generated registries,
    Ruff formatting, and `mypy --strict`.
 6. **Discoverable API.** Expose typed arguments such as `Gas.N2` and typed
-   responses such as `DataFrame`, `GasState`, and `SetpointState`.
+   responses such as `Reading`, `GasState`, and `SetpointState`.
 7. **Async-first, sync-available.** Async is canonical. Sync wraps async without
    reimplementing command logic.
 8. **Data out, not sinks in.** The library emits typed samples. Consumers choose
@@ -186,7 +186,7 @@ src/
       base.py
       factory.py
       session.py
-      data_frame.py
+      reading.py
       flow_meter.py
       flow_controller.py
       pressure_meter.py
@@ -581,24 +581,24 @@ class DeviceInfo:
     fluid_state: FluidState | None
 
 @dataclass(frozen=True, slots=True)
-class DataFrame:
+class Reading:
     unit_id: str
     format: DataFrameFormat
     values: Mapping[str, float | str | None]
     values_by_statistic: Mapping[Statistic, float | str | None]
     status: frozenset[StatusCode]
     received_at: datetime
-    monotonic_ns: int
+    t_mono_ns: int
     def as_dict(self) -> dict[str, float | str | None]: ...
     def get_float(self, name: str) -> float | None: ...
     def get_statistic(self, stat: Statistic) -> float | str | None: ...
 ```
 
-`DataFrame.values` is keyed by wire-level field names. `values_by_statistic` is
+`Reading.values` is keyed by wire-level field names. `values_by_statistic` is
 keyed by typed `Statistic` values when the field can be linked to the registry.
 Fields with no statistic mapping appear only in `values`.
 
-`DataFrame.as_dict()` emits a flat, sink-friendly representation. It uses a
+`Reading.as_dict()` emits a flat, sink-friendly representation. It uses a
 single stable `status` field rather than sparse per-status boolean columns,
 because first-batch CSV schema inference would otherwise miss status flags that
 appear later.
@@ -641,7 +641,7 @@ class DataFrameFormat:
 ```
 
 `DataFrameFormat.parse` is pure: bytes in, `ParsedFrame` out. The session wraps
-the parsed frame with timing metadata to create `DataFrame`.
+the parsed frame with timing metadata to create `Reading`.
 
 Observed `??D*` dialects:
 
@@ -749,7 +749,7 @@ Rules:
 - An internal producer task reads frames into a bounded memory stream with an
   overflow policy.
 
-`StreamingSession(rate_ms=...)` configures the device's `NCS` interval before
+`StreamingSession(rate_hz=...)` configures the device's `NCS` interval before
 entering streaming. This is distinct from `record(..., rate_hz=...)`, which is a
 software polling loop across one or more devices.
 
@@ -834,9 +834,9 @@ liquid-only, and dual-medium operations.
 ```python
 class Device:
     # Core I/O
-    async def poll(self) -> DataFrame: ...
+    async def poll(self) -> Reading: ...
     async def request(self, stats, *, averaging_ms: int = 1) -> MeasurementSet: ...
-    def stream(self, *, rate_ms: int | None = None, ...) -> StreamingSession: ...
+    def stream(self, *, rate_hz: int | None = None, ...) -> StreamingSession: ...
     async def execute(self, command, request) -> Resp: ...
 
     # Gas / units / tare — all-device
@@ -1031,7 +1031,7 @@ class AlicatManager:
     async def add(self, name: str, source: Device | str | Transport | AlicatProtocolClient, *, unit_id: str = "A", serial: SerialSettings | None = None) -> Device: ...
     async def remove(self, name: str) -> None: ...
     def get(self, name: str) -> Device: ...
-    async def poll(self, names: Sequence[str] | None = None) -> Mapping[str, DeviceResult[DataFrame]]: ...
+    async def poll(self, names: Sequence[str] | None = None) -> Mapping[str, DeviceResult[Reading]]: ...
     async def request(self, stats: Sequence[Statistic | str], names: Sequence[str] | None = None) -> Mapping[str, DeviceResult[MeasurementSet]]: ...
     async def execute(self, command: Command[Req, Resp], requests_by_name: Mapping[str, Req]) -> Mapping[str, DeviceResult[Resp]]: ...
 ```
@@ -1056,12 +1056,12 @@ The recorder emits timed batches and does not own storage.
 class Sample:
     device: str
     unit_id: str
-    monotonic_ns: int
+    t_mono_ns: int
     requested_at: datetime
     received_at: datetime
-    midpoint_at: datetime
+    t_utc: datetime
     latency_s: float
-    frame: DataFrame
+    frame: Reading
 
 @asynccontextmanager
 async def record(
@@ -1393,7 +1393,7 @@ async with record(mgr, rate_hz=10, duration=60) as stream:
     async for batch in stream:
         await kafka.send(
             "flows",
-            json.dumps({name: sample.frame.as_dict() for name, sample in batch.items()}),
+            json.dumps({name: sample.reading.as_dict() for name, sample in batch.items()}),
         )
 ```
 
@@ -1555,7 +1555,7 @@ Pages under `docs/`:
 - `quickstart-sync.md`: sync facade.
 - `devices.md`: supported models, media, firmware notes.
 - `commands.md`: command groups and return models from the catalog.
-- `data-frames.md`: dynamic data-frame formats and `Statistic` linkage.
+- `readings.md`: dynamic data-frame formats and `Statistic` linkage.
 - `logging.md`: recorder, sinks, and backpressure.
 - `streaming.md`: streaming mode and state transitions.
 - `testing.md`: fake transport, fixtures, hardware test tiers.
@@ -1746,7 +1746,7 @@ tolerances exist.
   M0-M8 dialect on GP07R100.
 - `??D*` has `DEFAULT` and `LEGACY` dialects; detection is by header, not
   firmware family.
-- `DataFrame.as_dict()` uses one `status` key.
+- `Reading.as_dict()` uses one `status` key.
 - `POLL_DATA.decode` returns `ParsedFrame`; `Session.poll()` wraps timing.
 - Manufacturing-info parsing keeps raw code mappings; named field extraction is
   factory-owned.
@@ -2113,7 +2113,7 @@ Acquisition and timing baselines captured on real hardware:
 | 10v20 poll p50 / p95 / p99 (19200 baud, 1000 samples) | 27.3 / 27.7 / 28.1 ms |
 | 8v17 poll p50 / p95 / p99 (115200 baud, 500 samples) | 5.8 / 10.2 / 12.8 ms |
 | 10v20 `DV` with 7 statistics | 39 ms |
-| 10v20 streaming `rate_ms=50` for 60 s, interval p99 | 51 ms |
+| 10v20 streaming `rate_hz=20` for 60 s, interval p99 | 51 ms |
 | Concurrent-command fast-fail while streaming | 0.088 ms (zero tx) |
 | 10-minute 10 Hz multi-sink soak (10v20) | 6000/6000 rows match across InMemory/CSV/JSONL/SQLite/Parquet |
 

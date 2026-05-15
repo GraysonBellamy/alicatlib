@@ -138,6 +138,7 @@ def _assert_parity(
 
 
 _DEVICE_PAIRS: list[tuple[str, Callable[..., object], Callable[..., object]]] = [
+    ("Device.snapshot", Device.snapshot, SyncDevice.snapshot),
     ("Device.poll", Device.poll, SyncDevice.poll),
     ("Device.request", Device.request, SyncDevice.request),
     ("Device.gas", Device.gas, SyncDevice.gas),

@@ -1,13 +1,13 @@
-r"""Data-frame format, parsing, and timing-wrapped result.
+r"""Reading — per-poll device result, plus the wire-format descriptors that build it.
 
 The Alicat ``A\r`` poll response is *core* to the polling path, yet its shape
 is device-dependent — Alicat advertises it via ``??D*`` at session start.
 This module models that format explicitly (so positional parsing survives
 conditional ``*``-marked fields), keeps the byte-level parse pure (no
-clocks), and layers timing provenance on top via :class:`DataFrame`.
+clocks), and layers timing provenance on top via :class:`Reading`.
 
 The split between :class:`ParsedFrame` (pure bytes → typed values) and
-:class:`DataFrame` (``ParsedFrame`` + ``received_at`` / ``monotonic_ns``) is
+:class:`Reading` (``ParsedFrame`` + ``received_at`` / ``t_mono_ns``) is
 load-bearing: parser unit tests stay clock-free (no freeze-time mocking),
 and the :class:`~alicatlib.devices.session.Session` owns the single place
 that captures timing. See design doc §5.6.
@@ -38,11 +38,11 @@ if TYPE_CHECKING:
     from alicatlib.registry._codes_gen import Statistic, Unit
 
 __all__ = [
-    "DataFrame",
     "DataFrameField",
     "DataFrameFormat",
     "DataFrameFormatFlavor",
     "ParsedFrame",
+    "Reading",
 ]
 
 _STATUS_VALUES: frozenset[str] = frozenset(code.value for code in StatusCode)
@@ -90,7 +90,7 @@ class DataFrameField:
 
     Attributes:
         name: Canonical field name, e.g. ``"Mass_Flow"``. Used as a key in
-            :attr:`ParsedFrame.values` and :meth:`DataFrame.get_float`.
+            :attr:`ParsedFrame.values` and :meth:`Reading.get_float`.
         raw_name: The exact name as reported by the device, preserved so a
             fixture diff can surface unexpected firmware-side renames.
         type_name: Wire type as declared in ``??D*`` (e.g. ``"decimal"``,
@@ -129,8 +129,8 @@ class ParsedFrame:
     """Byte-level parse result. Pure function of (raw, format); no timing.
 
     The :class:`~alicatlib.devices.session.Session` wraps this into a
-    :class:`DataFrame` via :meth:`DataFrame.from_parsed`, at which point
-    ``received_at`` and ``monotonic_ns`` are captured from the
+    :class:`Reading` via :meth:`Reading.from_parsed`, at which point
+    ``received_at`` and ``t_mono_ns`` are captured from the
     terminator-read call site. Keeping the two separate makes parser
     unit tests clock-free.
     """
@@ -238,40 +238,40 @@ class DataFrameFormat:
 
 
 @dataclass(frozen=True, slots=True)
-class DataFrame:
+class Reading:
     """Timing-wrapped :class:`ParsedFrame` — the public polling result.
 
-    Built by :meth:`from_parsed`. ``monotonic_ns`` is for drift analysis
+    Built by :meth:`from_parsed`. ``t_mono_ns`` is for drift analysis
     and scheduling (never wall-clock); ``received_at`` is for data
     provenance in sinks.
     """
 
     unit_id: str
-    format: DataFrameFormat
+    reading_format: DataFrameFormat
     values: Mapping[str, float | str | None]
     values_by_statistic: Mapping[Statistic, float | str | None]
     status: frozenset[StatusCode]
     received_at: datetime
-    monotonic_ns: int
+    t_mono_ns: int
 
     @classmethod
     def from_parsed(
         cls,
         parsed: ParsedFrame,
         *,
-        format: DataFrameFormat,  # noqa: A002 — "format" is the public kwarg per design §5.5
+        reading_format: DataFrameFormat,
         received_at: datetime,
-        monotonic_ns: int,
-    ) -> DataFrame:
+        t_mono_ns: int,
+    ) -> Reading:
         """Wrap a :class:`ParsedFrame` with timing captured at read time."""
         return cls(
             unit_id=parsed.unit_id,
-            format=format,
+            reading_format=reading_format,
             values=parsed.values,
             values_by_statistic=parsed.values_by_statistic,
             status=parsed.status,
             received_at=received_at,
-            monotonic_ns=monotonic_ns,
+            t_mono_ns=t_mono_ns,
         )
 
     def get_float(self, name: str) -> float | None:

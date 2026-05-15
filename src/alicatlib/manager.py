@@ -38,7 +38,7 @@ import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import anyio
 
@@ -57,11 +57,10 @@ from alicatlib.transport.serial import SerialTransport
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Mapping, Sequence
     from types import TracebackType
-    from typing import Self
 
     from alicatlib.commands import Command
-    from alicatlib.devices.data_frame import DataFrame
     from alicatlib.devices.models import MeasurementSet
+    from alicatlib.devices.reading import Reading
     from alicatlib.registry import Statistic
     from alicatlib.transport.base import Transport
 
@@ -99,6 +98,10 @@ class DeviceResult[T]:
     ``Either`` / ``Result`` ADT) so mypy's narrowing on ``ok`` reads
     cleanly at call sites without pattern matching.
 
+    Construct via the :meth:`success` / :meth:`failure` factories for
+    cleaner call-site reads; direct keyword construction stays valid
+    for backwards-compatible test fixtures.
+
     Attributes:
         value: The successful result, or ``None`` if the call failed.
         error: The captured :class:`~alicatlib.errors.AlicatError`, or
@@ -113,6 +116,17 @@ class DeviceResult[T]:
         """``True`` when the device produced a value (``error is None``)."""
         return self.error is None
 
+    @classmethod
+    def success[ValueT](cls, value: ValueT) -> DeviceResult[ValueT]:
+        """Build a successful result wrapping ``value``."""
+        del cls
+        return DeviceResult(value=value, error=None)
+
+    @classmethod
+    def failure(cls, error: AlicatError) -> Self:
+        """Build a failed result wrapping ``error``."""
+        return cls(value=None, error=error)
+
 
 # ---------------------------------------------------------------------------
 # Port canonicalization
@@ -120,6 +134,10 @@ class DeviceResult[T]:
 
 
 _WINDOWS_DEVICE_PREFIX = "\\\\.\\"
+
+
+def _is_windows() -> bool:
+    return sys.platform == "win32"
 
 
 def _canonical_port_key(port: str) -> str:
@@ -139,7 +157,7 @@ def _canonical_port_key(port: str) -> str:
     sources — those use :func:`id` as the key (the caller has already
     expressed ownership).
     """
-    if sys.platform == "win32":
+    if _is_windows():
         return port.removeprefix(_WINDOWS_DEVICE_PREFIX).upper()
     return os.path.realpath(port) if Path(port).exists() else port
 
@@ -417,7 +435,7 @@ class AlicatManager:
     async def poll(
         self,
         names: Sequence[str] | None = None,
-    ) -> Mapping[str, DeviceResult[DataFrame]]:
+    ) -> Mapping[str, DeviceResult[Reading]]:
         """Poll every (or named) device concurrently across ports.
 
         Returns a mapping from device name to :class:`DeviceResult`
@@ -427,7 +445,7 @@ class AlicatManager:
         """
         targets = self._resolve_names(names)
 
-        async def _poll(device: Device) -> DataFrame:
+        async def _poll(device: Device) -> Reading:
             return await device.poll()
 
         return await self._dispatch("poll", targets, _poll)
@@ -626,10 +644,10 @@ class AlicatManager:
                 try:
                     value: T = await op(device)
                 except AlicatError as err:
-                    results[member] = DeviceResult(value=None, error=err)
+                    results[member] = DeviceResult.failure(err)
                     errors.append(err)
                 else:
-                    results[member] = DeviceResult(value=value, error=None)
+                    results[member] = DeviceResult.success(value)
 
         async with anyio.create_task_group() as tg:
             for member_names in groups.values():

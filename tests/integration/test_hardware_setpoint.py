@@ -66,7 +66,7 @@ async def test_setpoint_query(hardware_device: Device) -> None:
     assert state.unit_id == hardware_device.unit_id
     # Modern LS decoder produces no frame (design §16.6); current and
     # requested are both populated from the 5-field wire reply.
-    assert state.frame is None
+    assert state.reading is None
     assert state.current is not None
     assert state.requested is not None
     assert state.unit_label  # non-empty

@@ -1,8 +1,8 @@
 """Sync wrappers for :func:`alicatlib.streaming.record` and :func:`alicatlib.sinks.pipe`.
 
-:func:`record` — sync context manager wrapping the async recorder. The
-produced iterator is blocking; on CM exit the underlying async task
-group is cancelled and joined by the portal.
+:func:`record` — sync context manager wrapping the async recorder. It
+yields a :class:`SyncRecording` carrying a blocking iterator, the live
+:class:`AcquisitionSummary`, and the rate the recorder is running at.
 
 :func:`pipe` — sync drain loop matching :func:`alicatlib.sinks.pipe`'s
 batch / time flush semantics. Rebuilt in sync-land rather than wrapping
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import time
 from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -44,9 +45,34 @@ if TYPE_CHECKING:
 __all__ = [
     "AcquisitionSummary",
     "OverflowPolicy",
+    "SyncRecording",
     "pipe",
     "record",
 ]
+
+
+@dataclass(slots=True)
+class SyncRecording[T]:
+    """Sync counterpart to :class:`alicatlib.streaming.Recording`.
+
+    Same contract as the async wrapper, but :attr:`stream` is a
+    blocking iterator (driven through the :class:`SyncPortal`) rather
+    than an async iterator. :attr:`summary` is the same live
+    :class:`AcquisitionSummary` the recorder is updating — consumers
+    treat it as read-only.
+
+    ``for batch in recording`` works directly via :meth:`__iter__`
+    delegation — no need to dereference ``recording.stream`` for the
+    common iteration path.
+    """
+
+    stream: Iterator[T]
+    summary: AcquisitionSummary
+    rate_hz: float
+
+    def __iter__(self) -> Iterator[T]:
+        """Delegate iteration to :attr:`stream`."""
+        return iter(self.stream)
 
 
 def _resolve_poll_source(
@@ -102,12 +128,14 @@ def record(
     overflow: OverflowPolicy = OverflowPolicy.BLOCK,
     buffer_size: int = 64,
     portal: SyncPortal | None = None,
-) -> Generator[Iterator[Mapping[str, Sample]]]:
+) -> Generator[SyncRecording[Mapping[str, Sample]]]:
     """Sync :func:`alicatlib.streaming.record`.
 
-    The yielded iterator is a blocking bridge to the recorder's
-    receive stream. Breaking out of the loop or exiting the ``with``
-    cancels the producer task.
+    Yields a :class:`SyncRecording` whose :attr:`stream` is a blocking
+    iterator over per-tick batches and whose :attr:`summary` is the live
+    :class:`AcquisitionSummary` (updated in place by the recorder).
+    Breaking out of the loop or exiting the ``with`` cancels the
+    producer task.
 
     If ``source`` is a :class:`SyncAlicatManager`, its portal is
     reused — the recorder and manager must share an event loop.
@@ -125,13 +153,17 @@ def record(
             overflow=overflow,
             buffer_size=buffer_size,
         )
-        async_stream = stack.enter_context(active_portal.wrap_async_context_manager(async_cm))
-        sync_iter = stack.enter_context(active_portal.wrap_async_iter(async_stream))
-        yield sync_iter
+        async_recording = stack.enter_context(active_portal.wrap_async_context_manager(async_cm))
+        sync_iter = stack.enter_context(active_portal.wrap_async_iter(async_recording.stream))
+        yield SyncRecording(
+            stream=sync_iter,
+            summary=async_recording.summary,
+            rate_hz=async_recording.rate_hz,
+        )
 
 
 def pipe(
-    stream: Iterator[Mapping[str, Sample]],
+    source: Iterator[Mapping[str, Sample]] | SyncRecording[Mapping[str, Sample]],
     sink: SyncSinkAdapter | SampleSink,
     *,
     batch_size: int = 64,
@@ -144,6 +176,9 @@ def pipe(
     same buffered-flush semantics as the async driver: flush when the
     buffer reaches ``batch_size`` samples or ``flush_interval`` seconds
     have passed since the last flush.
+
+    ``source`` accepts either the :class:`SyncRecording` yielded by
+    :func:`record` or its raw ``recording.stream``.
 
     ``sink`` may be a :class:`SyncSinkAdapter` (already open) or a raw
     async :class:`SampleSink`. In the async case a ``portal`` must be
@@ -165,6 +200,10 @@ def pipe(
     if flush_interval <= 0:
         raise ValueError(f"flush_interval must be > 0, got {flush_interval!r}")
 
+    stream: Iterator[Mapping[str, Sample]] = (
+        source.stream if isinstance(source, SyncRecording) else source
+    )
+
     if isinstance(sink, SyncSinkAdapter):
         flush = sink.write_many
     else:
@@ -183,7 +222,7 @@ def pipe(
             active.call(async_sink.write_many, samples)
 
     started_at = datetime.now(UTC)
-    emitted = 0
+    summary = AcquisitionSummary(started_at=started_at)
     buffer: list[Sample] = []
     last_flush = time.monotonic()
 
@@ -192,20 +231,14 @@ def pipe(
         now = time.monotonic()
         if len(buffer) >= batch_size or (now - last_flush) >= flush_interval:
             flush(buffer)
-            emitted += len(buffer)
+            summary.samples_emitted += len(buffer)
             buffer.clear()
             last_flush = now
 
     if buffer:
         flush(buffer)
-        emitted += len(buffer)
+        summary.samples_emitted += len(buffer)
         buffer.clear()
 
-    finished_at = datetime.now(UTC)
-    return AcquisitionSummary(
-        started_at=started_at,
-        finished_at=finished_at,
-        samples_emitted=emitted,
-        samples_late=0,
-        max_drift_ms=0.0,
-    )
+    summary.finished_at = datetime.now(UTC)
+    return summary

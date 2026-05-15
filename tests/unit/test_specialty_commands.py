@@ -23,12 +23,12 @@ from alicatlib.commands import (
 )
 from alicatlib.commands.tare import ZCA_DELAY_MAX_S, ZCA_DELAY_MIN_S
 from alicatlib.commands.user_data import UD_MAX_VALUE_LEN
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.models import AnalogOutputChannel
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
 )
-from alicatlib.devices.models import AnalogOutputChannel
 from alicatlib.errors import AlicatParseError, AlicatValidationError
 from alicatlib.firmware import FirmwareVersion
 from alicatlib.protocol.parser import parse_optional_float

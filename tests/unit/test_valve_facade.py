@@ -16,13 +16,13 @@ import pytest
 
 from alicatlib.commands import Capability
 from alicatlib.devices import DeviceKind, Medium
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.flow_controller import FlowController
+from alicatlib.devices.models import DeviceInfo, StatusCode, TimeUnit
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
 )
-from alicatlib.devices.flow_controller import FlowController
-from alicatlib.devices.models import DeviceInfo, StatusCode, TimeUnit
 from alicatlib.devices.session import Session
 from alicatlib.errors import AlicatValidationError
 from alicatlib.firmware import FirmwareVersion
@@ -125,9 +125,9 @@ class TestHoldValves:
         session = await _make_session({b"AHP\r": b"A 50.0 HLD\r"})
         dev = FlowController(session)
         result = await dev.hold_valves()
-        assert result.frame.unit_id == "A"
+        assert result.reading.unit_id == "A"
         assert result.held is True
-        assert StatusCode.HLD in result.frame.status
+        assert StatusCode.HLD in result.reading.status
 
     @pytest.mark.anyio
     async def test_hc_requires_confirm(self) -> None:
@@ -151,7 +151,7 @@ class TestHoldValves:
         dev = FlowController(session)
         result = await dev.cancel_valve_hold()
         assert result.held is False
-        assert StatusCode.HLD not in result.frame.status
+        assert StatusCode.HLD not in result.reading.status
 
     @pytest.mark.anyio
     async def test_cancel_without_active_hold_still_ok(self) -> None:

@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Protocol
 import anyio
 
 from alicatlib._logging import get_logger
-from alicatlib.streaming.recorder import AcquisitionSummary
+from alicatlib.streaming.recorder import AcquisitionSummary, Recording
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping, Sequence
@@ -107,38 +107,40 @@ def sample_to_row(sample: Sample) -> dict[str, float | str | int | None]:
 
     - ``device`` — manager-assigned name.
     - ``unit_id`` — bus-level single-letter id.
-    - ``requested_at`` / ``received_at`` / ``midpoint_at`` — ISO 8601.
+    - ``t_utc`` / ``requested_at`` / ``received_at`` — ISO 8601.
+    - ``t_mono_ns`` — monotonic acquisition midpoint, ns since boot.
     - ``latency_s`` — poll round-trip, seconds.
-    - *frame fields* — everything from :meth:`DataFrame.as_dict` *except*
-      the frame's own ``received_at`` (superseded by the sample-level
+    - *reading fields* — everything from :meth:`Reading.as_dict` *except*
+      the reading's own ``received_at`` (superseded by the sample-level
       value so all rows have the same ``received_at`` semantics).
     - ``status`` — comma-joined sorted status codes (empty string when
-      no flags active), from :meth:`DataFrame.as_dict`.
+      no flags active), from :meth:`Reading.as_dict`.
 
-    The frame's own ``received_at`` is dropped so the row's ``received_at``
-    consistently means "recorder-observed reply time" across rows —
-    otherwise multi-device rows would mix frame-level and sample-level
-    timings.
+    The reading's own ``received_at`` is dropped so the row's
+    ``received_at`` consistently means "recorder-observed reply time"
+    across rows — otherwise multi-device rows would mix reading-level
+    and sample-level timings.
     """
     row: dict[str, float | str | int | None] = {
         "device": sample.device,
         "unit_id": sample.unit_id,
+        "t_utc": sample.t_utc.isoformat(),
+        "t_mono_ns": sample.t_mono_ns,
         "requested_at": sample.requested_at.isoformat(),
         "received_at": sample.received_at.isoformat(),
-        "midpoint_at": sample.midpoint_at.isoformat(),
         "latency_s": sample.latency_s,
     }
-    frame_dict = sample.frame.as_dict()
-    frame_dict.pop("received_at", None)
+    reading_dict = sample.reading.as_dict()
+    reading_dict.pop("received_at", None)
     # The first ??D* field is the unit-id echo (design §5.6). It
     # duplicates ``sample.unit_id`` verbatim and collides case-
     # insensitively with the ``unit_id`` column in strict backends like
-    # SQLite (hardware-validation finding, 2026-04-17: captured parser names
-    # the field ``Unit_ID`` while the sample-level column is
+    # SQLite (hardware-validation finding, 2026-04-17: captured parser
+    # names the field ``Unit_ID`` while the sample-level column is
     # ``unit_id`` — SQLite treats them as a duplicate column).
     for key in ("Unit_ID", "unit_id"):
-        frame_dict.pop(key, None)
-    row.update(frame_dict)
+        reading_dict.pop(key, None)
+    row.update(reading_dict)
     return row
 
 
@@ -148,13 +150,13 @@ def sample_to_row(sample: Sample) -> dict[str, float | str | int | None]:
 
 
 async def pipe(
-    stream: AsyncIterator[Mapping[str, Sample]],
+    source: AsyncIterator[Mapping[str, Sample]] | Recording[Mapping[str, Sample]],
     sink: SampleSink,
     *,
     batch_size: int = 64,
     flush_interval: float = 1.0,
 ) -> AcquisitionSummary:
-    r"""Drain ``stream`` into ``sink`` with buffered flushes.
+    r"""Drain ``source`` into ``sink`` with buffered flushes.
 
     Reads per-tick batches from the recorder and accumulates the
     individual :class:`Sample`\ s into a list. A flush happens when
@@ -172,8 +174,9 @@ async def pipe(
     logger on CM exit; this summary is the sink-side view.
 
     Args:
-        stream: The async iterator yielded by
-            :func:`~alicatlib.streaming.record`.
+        source: Either the :class:`Recording` yielded by
+            :func:`~alicatlib.streaming.record`, or its raw
+            ``recording.stream`` (an async iterator of per-tick batches).
         sink: Any :class:`SampleSink`. Must already be open.
         batch_size: Buffer threshold in samples (not batches). Defaults
             to ``64`` to match the design default.
@@ -193,17 +196,18 @@ async def pipe(
     if flush_interval <= 0:
         raise ValueError(f"flush_interval must be > 0, got {flush_interval!r}")
 
+    stream = source.stream if isinstance(source, Recording) else source
+
     started_at = datetime.now(UTC)
-    emitted = 0
+    summary = AcquisitionSummary(started_at=started_at)
     buffer: list[Sample] = []
     last_flush = anyio.current_time()
 
     async def _flush() -> None:
-        nonlocal emitted
         if not buffer:
             return
         await sink.write_many(buffer)
-        emitted += len(buffer)
+        summary.samples_emitted += len(buffer)
         buffer.clear()
 
     async for batch in stream:
@@ -214,19 +218,13 @@ async def pipe(
             last_flush = now
 
     await _flush()
-    finished_at = datetime.now(UTC)
+    summary.finished_at = datetime.now(UTC)
     _logger.info(
         "sinks.pipe_done",
         extra={
             "sink": type(sink).__name__,
-            "samples_emitted": emitted,
-            "duration_s": (finished_at - started_at).total_seconds(),
+            "samples_emitted": summary.samples_emitted,
+            "duration_s": (summary.finished_at - started_at).total_seconds(),
         },
     )
-    return AcquisitionSummary(
-        started_at=started_at,
-        finished_at=finished_at,
-        samples_emitted=emitted,
-        samples_late=0,
-        max_drift_ms=0.0,
-    )
+    return summary

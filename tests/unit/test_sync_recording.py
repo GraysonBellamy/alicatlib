@@ -16,14 +16,14 @@ import pytest
 
 from alicatlib.commands import Capability
 from alicatlib.devices import DeviceKind, Medium
-from alicatlib.devices.data_frame import (
-    DataFrame,
+from alicatlib.devices.models import DeviceInfo, StatusCode
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
     ParsedFrame,
+    Reading,
 )
-from alicatlib.devices.models import DeviceInfo, StatusCode
 from alicatlib.errors import AlicatSinkDependencyError
 from alicatlib.firmware import FirmwareVersion
 from alicatlib.manager import DeviceResult
@@ -89,7 +89,7 @@ def _info() -> DeviceInfo:  # pyright: ignore[reportUnusedFunction]
     )
 
 
-def _frame(mass_flow: float = 1.0, tick: int = 0) -> DataFrame:
+def _frame(mass_flow: float = 1.0, tick: int = 0) -> Reading:
     fmt = _format()
     parsed = ParsedFrame(
         unit_id="A",
@@ -97,11 +97,11 @@ def _frame(mass_flow: float = 1.0, tick: int = 0) -> DataFrame:
         values_by_statistic={Statistic.MASS_FLOW: mass_flow},
         status=frozenset[StatusCode](),
     )
-    return DataFrame.from_parsed(
+    return Reading.from_parsed(
         parsed,
-        format=fmt,
+        reading_format=fmt,
         received_at=datetime.now(UTC),
-        monotonic_ns=1_000_000 * tick,
+        t_mono_ns=1_000_000 * tick,
     )
 
 
@@ -112,10 +112,10 @@ def _sample(tick: int = 0, mass_flow: float = 1.0) -> Sample:
         unit_id="A",
         requested_at=now,
         received_at=now,
-        midpoint_at=now,
+        t_utc=now,
         latency_s=0.001,
-        monotonic_ns=1_000_000 * tick,
-        frame=_frame(mass_flow=mass_flow, tick=tick),
+        t_mono_ns=1_000_000 * tick,
+        reading=_frame(mass_flow=mass_flow, tick=tick),
     )
 
 
@@ -127,7 +127,7 @@ class _StubPoll:
     async def poll(
         self,
         names: Sequence[str] | None = None,
-    ) -> Mapping[str, DeviceResult[DataFrame]]:
+    ) -> Mapping[str, DeviceResult[Reading]]:
         self.calls += 1
         targets = list(names) if names is not None else list(self._names)
         return {

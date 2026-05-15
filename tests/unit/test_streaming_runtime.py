@@ -7,7 +7,7 @@ Exercises the full streaming lifecycle against :class:`FakeTransport`:
 - The client's streaming latch is set on enter, cleared on exit.
 - Normal :meth:`Session.execute` refuses commands while streaming.
 - The producer parses frames through the session's cached
-  :class:`DataFrameFormat` and yields :class:`DataFrame` instances.
+  :class:`DataFrameFormat` and yields :class:`Reading` instances.
 - Strict-mode parse errors propagate out of ``__anext__``.
 - Lenient-mode parse errors are logged and skipped.
 - Double-enter fails loudly (one streamer per client).
@@ -24,13 +24,13 @@ import pytest
 from alicatlib.commands import Capability
 from alicatlib.commands.polling import POLL_DATA, PollRequest
 from alicatlib.devices import DeviceKind, Medium
-from alicatlib.devices.data_frame import (
-    DataFrame,
+from alicatlib.devices.models import DeviceInfo
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
+    Reading,
 )
-from alicatlib.devices.models import DeviceInfo
 from alicatlib.devices.session import Session
 from alicatlib.devices.streaming import OverflowPolicy, StreamingSession
 from alicatlib.errors import (
@@ -230,13 +230,13 @@ class TestEnterExitWireBytes:
 class TestIteration:
     @pytest.mark.anyio
     async def test_yields_parsed_frames(self) -> None:
-        """Feeding frames into the transport yields :class:`DataFrame`s."""
+        """Feeding frames into the transport yields :class:`Reading`s."""
         session, fake, _ = await _make_session()
         _feed_frame(fake, 1.0)
         _feed_frame(fake, 2.5)
         _feed_frame(fake, 3.25)
 
-        frames: list[DataFrame] = []
+        frames: list[Reading] = []
         stream = StreamingSession(session)
         async with stream:
             async for frame in stream:
@@ -288,7 +288,7 @@ class TestIteration:
         fake.feed(b"@ 43.000\r")
 
         stream = StreamingSession(session)
-        frames: list[DataFrame] = []
+        frames: list[Reading] = []
         async with stream:
             async for frame in stream:
                 frames.append(frame)

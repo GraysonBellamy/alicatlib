@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from datetime import date
 
-    from alicatlib.devices.data_frame import DataFrameFormat
+    from alicatlib.devices.reading import DataFrameFormat
 
 __all__ = [
     "DATA_FRAME_FORMAT_QUERY",

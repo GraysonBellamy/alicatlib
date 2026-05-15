@@ -6,8 +6,8 @@ from datetime import date
 
 import pytest
 
-from alicatlib.devices.data_frame import DataFrameFormatFlavor
 from alicatlib.devices.models import ManufacturingInfo, StatusCode
+from alicatlib.devices.reading import DataFrameFormatFlavor
 from alicatlib.errors import (
     AlicatParseError,
     AlicatUnitIdMismatchError,
@@ -376,7 +376,7 @@ class TestParseStatusCodes:
         assert parse_status_codes(["HLD", "HLD"]) == frozenset({StatusCode.HLD})
 
     def test_result_is_frozenset(self) -> None:
-        """Return type is explicitly frozen — callers can stash it in a DataFrame."""
+        """Return type is explicitly frozen — callers can stash it in a Reading."""
         got = parse_status_codes(["HLD"])
         assert isinstance(got, frozenset)
 

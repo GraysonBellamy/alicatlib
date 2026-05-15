@@ -67,7 +67,7 @@ scheduling works the same way as the async recorder — see
 
 ```python
 with Alicat.open("/dev/ttyUSB0") as dev:
-    with dev.stream(rate_ms=50) as stream:
+    with dev.stream(rate_hz=20) as stream:
         for frame in stream:
             print(frame.get_float("Mass_Flow"))
 ```

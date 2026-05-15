@@ -10,17 +10,17 @@ import pytest
 from alicatlib.commands import Capability
 from alicatlib.devices import DeviceKind, Medium
 from alicatlib.devices.base import Device
-from alicatlib.devices.data_frame import (
-    DataFrameField,
-    DataFrameFormat,
-    DataFrameFormatFlavor,
-)
 from alicatlib.devices.flow_controller import FlowController
 from alicatlib.devices.models import (
     AnalogOutputChannel,
     DeviceInfo,
     StatusCode,
     StpNtpMode,
+)
+from alicatlib.devices.reading import (
+    DataFrameField,
+    DataFrameFormat,
+    DataFrameFormatFlavor,
 )
 from alicatlib.devices.session import Session
 from alicatlib.errors import (
@@ -222,7 +222,7 @@ class TestDisplay:
         dev = Device(session)
         result = await dev.lock_display()
         assert result.locked is True
-        assert StatusCode.LCK in result.frame.status
+        assert StatusCode.LCK in result.reading.status
 
     @pytest.mark.anyio
     async def test_unlock_clears_lck_status(self) -> None:

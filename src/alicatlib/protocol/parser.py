@@ -21,13 +21,13 @@ from datetime import date
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.models import ManufacturingInfo, StatusCode
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
     ParsedFrame,
 )
-from alicatlib.devices.models import ManufacturingInfo, StatusCode
 from alicatlib.errors import (
     AlicatParseError,
     AlicatUnitIdMismatchError,
@@ -816,7 +816,7 @@ def parse_data_frame(raw: bytes, fmt: DataFrameFormat) -> ParsedFrame:
     free-function alias so all low-level parsers share one import site
     (:mod:`alicatlib.protocol.parser`), matching the rest of design §5.11.
     Pure — no clocks; the session captures ``received_at`` /
-    ``monotonic_ns`` and wraps via :meth:`DataFrame.from_parsed`.
+    ``monotonic_ns`` and wraps via :meth:`Reading.from_parsed`.
     """
     return fmt.parse(raw)
 

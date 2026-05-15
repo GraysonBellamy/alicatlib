@@ -17,7 +17,12 @@ import pytest
 if TYPE_CHECKING:
     from _pytest.mark.structures import ParameterSet
 
-_UVLOOP_UNAVAILABLE = sys.platform == "win32" or importlib.util.find_spec("uvloop") is None
+
+def _uvloop_unavailable() -> bool:
+    return sys.platform == "win32" or importlib.util.find_spec("uvloop") is None
+
+
+_UVLOOP_UNAVAILABLE = _uvloop_unavailable()
 
 _PARAMS: list[ParameterSet] = [
     pytest.param(("asyncio", {"use_uvloop": False}), id="asyncio"),

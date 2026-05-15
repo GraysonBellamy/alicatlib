@@ -21,7 +21,7 @@ from alicatlib.commands import (
     HoldValvesRequest,
     ValveDriveRequest,
 )
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,

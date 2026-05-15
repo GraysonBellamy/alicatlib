@@ -7,7 +7,7 @@ import pytest
 from alicatlib.commands import POLL_DATA, PollData, PollRequest, ResponseMode
 from alicatlib.commands.base import Capability, DecodeContext
 from alicatlib.devices import DeviceKind
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,

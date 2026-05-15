@@ -6,7 +6,7 @@ This module carries three command specs:
 - :data:`GAS_SELECT_LEGACY` (``G``) — legacy set-gas for every other
   supported firmware (all V1_V7, V8_V9, GP, and V10 < 10v05). The
   response is a post-op data frame rather than the modern 4-field reply;
-  the decoder returns a :class:`~alicatlib.devices.data_frame.ParsedFrame`
+  the decoder returns a :class:`~alicatlib.devices.reading.ParsedFrame`
   and the facade method (:meth:`FlowMeter.gas`) fabricates a
   :class:`GasState` by combining the request's gas code with the
   frame's unit id. Legacy ``G`` has no query form and no ``save`` flag.
@@ -38,7 +38,7 @@ from alicatlib.registry import Gas, gas_registry
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from alicatlib.devices.data_frame import ParsedFrame
+    from alicatlib.devices.reading import ParsedFrame
 
 __all__ = [
     "GAS_LIST",

@@ -38,7 +38,7 @@ from alicatlib.firmware import FirmwareFamily, FirmwareVersion
 from alicatlib.protocol.parser import parse_fields, parse_float
 
 if TYPE_CHECKING:
-    from alicatlib.devices.data_frame import ParsedFrame
+    from alicatlib.devices.reading import ParsedFrame
 
 __all__ = [
     "CANCEL_VALVE_HOLD",

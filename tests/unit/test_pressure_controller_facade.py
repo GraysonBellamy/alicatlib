@@ -28,14 +28,14 @@ import pytest
 from alicatlib.commands import Capability
 from alicatlib.devices import DeviceKind, Medium
 from alicatlib.devices.base import Device
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.models import DeviceInfo
+from alicatlib.devices.pressure_controller import PressureController
+from alicatlib.devices.pressure_meter import PressureMeter
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
 )
-from alicatlib.devices.models import DeviceInfo
-from alicatlib.devices.pressure_controller import PressureController
-from alicatlib.devices.pressure_meter import PressureMeter
 from alicatlib.devices.session import Session
 from alicatlib.errors import (
     AlicatUnsupportedCommandError,
@@ -188,7 +188,7 @@ class TestSetpointFacade:
         assert state.requested == 50.0
         assert state.current == 49.9
         assert state.unit_label == "PSIA"
-        assert state.frame is None  # modern path carries no post-op frame
+        assert state.reading is None  # modern path carries no post-op frame
 
     @pytest.mark.anyio
     async def test_modern_query(self) -> None:
@@ -212,7 +212,7 @@ class TestSetpointFacade:
         # shared ``_build_setpoint_state`` helper — ``current`` and
         # ``requested`` both come from the ``Setpoint`` column.
         assert state.requested == 30.0
-        assert state.frame is not None
+        assert state.reading is not None
 
     @pytest.mark.anyio
     async def test_legacy_query_raises(self) -> None:

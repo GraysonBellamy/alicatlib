@@ -24,7 +24,7 @@ from alicatlib.commands import (
     TareGaugePressureRequest,
 )
 from alicatlib.devices import DeviceKind
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
@@ -36,7 +36,7 @@ from alicatlib.registry import Statistic
 from alicatlib.testing import parse_fixture
 
 if TYPE_CHECKING:
-    from alicatlib.devices.data_frame import ParsedFrame
+    from alicatlib.devices.reading import ParsedFrame
 
 _FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "responses"
 

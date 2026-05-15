@@ -8,11 +8,11 @@ same bus with a tiny buffer and an artificially slow consumer so
 Setting the stream rate uses the ``NCS`` command, which requires V10
 firmware 10v05+. This example defaults to *not* setting a rate — the
 device streams at whatever it's already configured for, which is the
-portable choice. Pass ``RATE_MS=50`` to exercise the configurable path
-on a V10 device.
+portable choice. Pass ``RATE_HZ=20`` to exercise the configurable path
+on a V10 device (20 Hz = 50 ms).
 
     PORT=/dev/ttyUSB0 uv run python examples/06_async_streaming.py
-    PORT=/dev/ttyUSB0 RATE_MS=50 uv run python examples/06_async_streaming.py
+    PORT=/dev/ttyUSB0 RATE_HZ=20 uv run python examples/06_async_streaming.py
 """
 
 from __future__ import annotations
@@ -29,15 +29,15 @@ from alicatlib.transport import SerialSettings
 async def main() -> None:
     port = os.environ.get("PORT", "/dev/ttyUSB0")
     baud = int(os.environ.get("BAUD", "19200"))
-    rate_ms_env = os.environ.get("RATE_MS")
-    rate_ms = int(rate_ms_env) if rate_ms_env else None
+    rate_hz_env = os.environ.get("RATE_HZ")
+    rate_hz = float(rate_hz_env) if rate_hz_env else None
 
     async with await open_device(port, serial=SerialSettings(port=port, baudrate=baud)) as dev:
         print("run 1: full-speed consumer, default overflow (DROP_OLDEST)")
         frames: list[float] = []
-        async with dev.stream(rate_ms=rate_ms) as stream:
-            async for frame in stream:
-                mass_flow = frame.get_statistic(Statistic.MASS_FLOW)
+        async with dev.stream(rate_hz=rate_hz) as stream:
+            async for reading in stream:
+                mass_flow = reading.get_statistic(Statistic.MASS_FLOW)
                 if isinstance(mass_flow, float):
                     frames.append(mass_flow)
                 if len(frames) >= 100:
@@ -50,7 +50,7 @@ async def main() -> None:
         print("run 2: deliberately slow consumer, tiny buffer")
         slow_count = 0
         async with dev.stream(
-            rate_ms=rate_ms,
+            rate_hz=rate_hz,
             overflow=OverflowPolicy.DROP_OLDEST,
             buffer_size=4,
         ) as stream:

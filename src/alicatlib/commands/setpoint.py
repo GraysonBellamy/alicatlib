@@ -4,7 +4,7 @@ Three command specs ship here:
 
 - :data:`SETPOINT` (``LS``) — modern setpoint get/set for controllers
   on V10 (all) and V8_V9 ≥ 9v00. Response is a post-op data frame;
-  the decoder returns a :class:`~alicatlib.devices.data_frame.ParsedFrame`
+  the decoder returns a :class:`~alicatlib.devices.reading.ParsedFrame`
   and the facade (:meth:`FlowController.setpoint`) wraps into a
   :class:`SetpointState`.
 - :data:`SETPOINT_LEGACY` (``S``) — paired legacy setpoint for
@@ -47,7 +47,7 @@ from alicatlib.protocol.parser import (
 from alicatlib.registry.units import unit_registry
 
 if TYPE_CHECKING:
-    from alicatlib.devices.data_frame import ParsedFrame
+    from alicatlib.devices.reading import ParsedFrame
     from alicatlib.registry import Unit
 
 __all__ = [
@@ -142,7 +142,7 @@ def _decode_setpoint_reply(
         requested=requested,
         unit=unit,
         unit_label=unit_label,
-        frame=None,
+        reading=None,
     )
 
 

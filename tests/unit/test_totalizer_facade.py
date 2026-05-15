@@ -10,16 +10,16 @@ import pytest
 from alicatlib.commands import Capability
 from alicatlib.devices import DeviceKind, Medium
 from alicatlib.devices.base import Device
-from alicatlib.devices.data_frame import (
-    DataFrameField,
-    DataFrameFormat,
-    DataFrameFormatFlavor,
-)
 from alicatlib.devices.models import (
     DeviceInfo,
     TotalizerId,
     TotalizerLimitMode,
     TotalizerMode,
+)
+from alicatlib.devices.reading import (
+    DataFrameField,
+    DataFrameFormat,
+    DataFrameFormatFlavor,
 )
 from alicatlib.devices.session import Session
 from alicatlib.errors import AlicatValidationError
@@ -172,7 +172,7 @@ class TestTotalizerResetFacade:
         session = await _make_session({b"AT 1\r": b"A 0.000\r"})
         dev = Device(session)
         result = await dev.totalizer_reset(TotalizerId.FIRST, confirm=True)
-        assert result.frame.unit_id == "A"
+        assert result.reading.unit_id == "A"
 
     @pytest.mark.anyio
     async def test_reset_peak_requires_confirm(self) -> None:
@@ -186,7 +186,7 @@ class TestTotalizerResetFacade:
         session = await _make_session({b"ATP 2\r": b"A 0.000\r"})
         dev = Device(session)
         result = await dev.totalizer_reset_peak(TotalizerId.SECOND, confirm=True)
-        assert result.frame.unit_id == "A"
+        assert result.reading.unit_id == "A"
 
 
 # ---------------------------------------------------------------------------

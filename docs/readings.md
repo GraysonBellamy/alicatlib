@@ -1,4 +1,4 @@
-# Data frames
+# Readings
 
 The Alicat poll response — the `<uid>\r` command's reply — is a
 **device-dependent** line of whitespace-separated fields. Alicat
@@ -8,7 +8,11 @@ resolves to a recognised engineering unit. The library models every
 layer of that explicitly so polling is type-safe end to end.
 
 See [Design](design.md) §5.4, §5.6, and §15.3 for the authoritative
-architecture. Source: [devices/data_frame.py](../src/alicatlib/devices/data_frame.py).
+architecture. Source: [devices/reading.py](../src/alicatlib/devices/reading.py).
+
+> **Naming note.** `Reading` is the cross-library canonical name (see
+> the v1 unified-API spec). The previous class name `DataFrame` has
+> been removed — public call sites use `alicatlib.Reading`.
 
 ## The problem
 
@@ -22,11 +26,11 @@ The column order, count, and types differ per device — across firmware
 families, across device kinds, across optional features. A fixed parser
 can't survive this; the library caches the advertised format at open
 time and decodes every subsequent poll through that cached
-[`DataFrameFormat`](../src/alicatlib/devices/data_frame.py#L144).
+[`DataFrameFormat`](../src/alicatlib/devices/reading.py).
 
 ## `??D*` dialects
 
-[`DataFrameFormatFlavor`](../src/alicatlib/devices/data_frame.py#L51)
+[`DataFrameFormatFlavor`](../src/alicatlib/devices/reading.py)
 models two observed dialects:
 
 | Flavor | Header shape | Observed devices |
@@ -54,7 +58,7 @@ the probe. See [devices.md](devices.md) for the GP identification path.
 Two command sweeps run *after* `??D*` parses at open time:
 
 1. **`DCU` (engineering-units query).** For every numeric
-   [`DataFrameField`](../src/alicatlib/devices/data_frame.py#L87) whose
+   [`DataFrameField`](../src/alicatlib/devices/reading.py) whose
    `unit` the `??D*` parser left `None` (because the advertisement
    carries only a label, not a registry-resolvable code in some
    dialects), the factory issues `DCU <stat>` to query the active
@@ -104,10 +108,10 @@ required fields are consumed.
 
 ## Parsing
 
-[`DataFrameFormat.parse(raw: bytes) -> ParsedFrame`](../src/alicatlib/devices/data_frame.py#L162)
+[`DataFrameFormat.parse(raw: bytes) -> ParsedFrame`](../src/alicatlib/devices/reading.py)
 is **pure** — no timing, no logging, no clocks. The factory and the
-polling path wrap it separately in `DataFrame.from_parsed(...)` at
-the site that captures `received_at` / `monotonic_ns`. Keeping the
+polling path wrap it separately in `Reading.from_parsed(...)` at
+the site that captures `received_at` / `t_mono_ns`. Keeping the
 split means parser unit tests are clock-free (no freeze-time mocking).
 
 The algorithm (design §5.6):
@@ -131,12 +135,14 @@ values (a field declared `decimal` that parses as text) return
 `None` via the per-field `parser` callable; the frame overall still
 decodes.
 
-## `DataFrame`
+## `Reading`
 
-[`DataFrame`](../src/alicatlib/devices/data_frame.py#L240) is the
+[`Reading`](../src/alicatlib/devices/reading.py) is the
 public polling result —
-[`ParsedFrame`](../src/alicatlib/devices/data_frame.py#L127) plus
-`received_at: datetime` (UTC) and `monotonic_ns: int`.
+[`ParsedFrame`](../src/alicatlib/devices/reading.py) plus
+`received_at: datetime` (UTC) and `t_mono_ns: int`. Construct via
+`Reading.from_parsed(parsed, reading_format=fmt, received_at=...,
+t_mono_ns=...)`.
 
 Three accessors:
 
@@ -147,9 +153,9 @@ on subscript, and there is no type coercion beyond what each field's
 `parser` applies.
 
 ```python
-frame.values["Mass_Flow"]          # 14.7 (float)
-frame.values["Gas"]                # "Air" (str)
-frame.values["Setpoint"]           # KeyError on a meter
+reading.values["Mass_Flow"]          # 14.7 (float)
+reading.values["Gas"]                # "Air" (str)
+reading.values["Setpoint"]           # KeyError on a meter
 ```
 
 ### `get_float(name: str) -> float | None`
@@ -158,9 +164,9 @@ frame.values["Setpoint"]           # KeyError on a meter
 exception. Use when the caller accepts missing values.
 
 ```python
-frame.get_float("Mass_Flow")       # 14.7
-frame.get_float("Gas")             # None (not numeric)
-frame.get_float("Nonexistent")     # None (absent)
+reading.get_float("Mass_Flow")       # 14.7
+reading.get_float("Gas")             # None (not numeric)
+reading.get_float("Nonexistent")     # None (absent)
 ```
 
 ### `get_statistic(stat: Statistic) -> float | str | None`
@@ -171,8 +177,8 @@ renames across firmware versions.
 
 ```python
 from alicatlib import Statistic
-frame.get_statistic(Statistic.MASS_FLOW)         # 14.7
-frame.get_statistic(Statistic.PRESSURE_GAUGE)    # None on a mass-flow device
+reading.get_statistic(Statistic.MASS_FLOW)         # 14.7
+reading.get_statistic(Statistic.GAUGE_PRESS)       # None on a mass-flow device
 ```
 
 ### `as_dict() -> dict[str, float | str | None]`
@@ -183,7 +189,7 @@ status codes collapse into a single comma-joined sorted string (empty
 when no codes are active) so downstream schema is stable across rows.
 
 ```python
-frame.as_dict()
+reading.as_dict()
 # {"Mass_Flow": 14.7, "Setpoint": 50.0, ..., "status": "HLD", "received_at": "2026-04-18T10:22:01.123456+00:00"}
 ```
 
@@ -201,7 +207,7 @@ code-equality checks cheap:
 
 ```python
 from alicatlib.devices.models import StatusCode
-if StatusCode.HLD in frame.status:
+if StatusCode.HLD in reading.status:
     print("valves on hold")
 ```
 
@@ -224,9 +230,10 @@ refresh is safe but emits two shapes.
 
 The [recorder](logging.md) ships each poll as a
 [`Sample`](../src/alicatlib/streaming/sample.py) wrapping the
-`DataFrame`. `sample_to_row` flattens via `DataFrame.as_dict()` —
-the same method called directly here. The sink's row shape is
-therefore exactly the data-frame shape, with recorder-side provenance
-(`device`, `unit_id`, timestamps, `latency_s`) prepended. See
+`Reading` in `sample.reading`. `sample_to_row` flattens via
+`Reading.as_dict()` — the same method called directly here. The
+sink's row shape is therefore exactly the reading's shape, with
+recorder-side provenance (`device`, `unit_id`, `t_utc`, `t_mono_ns`,
+`requested_at`, `received_at`, `latency_s`) prepended. See
 [logging.md](logging.md#stable-row-layout-sample_to_row) for the full
 row layout.

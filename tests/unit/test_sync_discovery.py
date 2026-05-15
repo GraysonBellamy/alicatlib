@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from alicatlib.devices.discovery import DiscoveryResult
+from alicatlib.protocol import ProtocolKind
 from alicatlib.sync import SyncPortal, find_devices, list_serial_ports, probe
 from alicatlib.sync import discovery as sync_discovery
 
@@ -21,10 +22,12 @@ if TYPE_CHECKING:
 def _make_result(port: str, unit_id: str = "A", baudrate: int = 19200) -> DiscoveryResult:
     return DiscoveryResult(
         port=port,
-        unit_id=unit_id,
+        address=unit_id,
         baudrate=baudrate,
-        info=None,
+        protocol=ProtocolKind.ASCII,
+        device_info=None,
         error=None,
+        elapsed_s=0.0,
     )
 
 

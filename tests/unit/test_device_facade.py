@@ -16,14 +16,14 @@ import pytest
 from alicatlib.commands import Capability
 from alicatlib.devices import DeviceKind, Medium
 from alicatlib.devices.base import Device
-from alicatlib.devices.data_frame import (
+from alicatlib.devices.flow_controller import FlowController
+from alicatlib.devices.flow_meter import FlowMeter
+from alicatlib.devices.models import DeviceInfo
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
 )
-from alicatlib.devices.flow_controller import FlowController
-from alicatlib.devices.flow_meter import FlowMeter
-from alicatlib.devices.models import DeviceInfo
 from alicatlib.devices.session import Session
 from alicatlib.errors import (
     AlicatUnsupportedCommandError,
@@ -328,11 +328,11 @@ class TestTareFacade:
         )
         dev = Device(session)
         result = await dev.tare_flow()
-        assert result.frame.values["Mass_Flow"] == 0.0
-        assert result.frame.values["Gas_Label"] == "N2"
-        # DataFrame wrapping captures timing at facade level.
-        assert result.frame.received_at is not None
-        assert result.frame.monotonic_ns > 0
+        assert result.reading.values["Mass_Flow"] == 0.0
+        assert result.reading.values["Gas_Label"] == "N2"
+        # Reading wrapping captures timing at facade level.
+        assert result.reading.received_at is not None
+        assert result.reading.t_mono_ns > 0
 
     @pytest.mark.anyio
     async def test_tare_flow_emits_precondition_info_log(
@@ -361,7 +361,7 @@ class TestTareFacade:
         )
         dev = Device(session)
         result = await dev.tare_gauge_pressure()
-        assert result.frame.values["Abs_Press"] == 14.70
+        assert result.reading.values["Abs_Press"] == 14.70
 
     @pytest.mark.anyio
     async def test_tare_absolute_pressure_requires_tareable_abs_pressure(self) -> None:
@@ -419,7 +419,7 @@ class TestTareFacade:
         )
         dev = Device(session)
         result = await dev.tare_absolute_pressure()
-        assert result.frame.unit_id == "A"
+        assert result.reading.unit_id == "A"
 
 
 # ---------------------------------------------------------------------------
@@ -463,7 +463,7 @@ class TestSetpointFacade:
         assert state.current == 45.0
         assert state.unit is Unit.SCCM
         # Modern path carries no post-op data frame (design §16.6).
-        assert state.frame is None
+        assert state.reading is None
 
     @pytest.mark.anyio
     async def test_modern_query(self) -> None:
