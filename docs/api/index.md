@@ -1,3 +1,7 @@
+---
+description: API reference index for alicatlib — auto-generated mkdocstrings pages for every public module, class, and function in the library.
+---
+
 # API reference
 
 Auto-generated from source docstrings via

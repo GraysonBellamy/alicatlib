@@ -1,3 +1,7 @@
+---
+description: Hardware-anchored latency and throughput baselines for alicatlib — anyserial transport, protocol-client hot path, recorder, and sink throughput.
+---
+
 # Benchmarks
 
 Latency and throughput baselines for alicatlib. We track these against

@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.devices — Device, FlowMeter, FlowController, PressureMeter, PressureController, DeviceKind, Medium, and open_device.
+---
+
 # `alicatlib.devices`
 
 Device facades and identification. See [Devices](../devices.md) for

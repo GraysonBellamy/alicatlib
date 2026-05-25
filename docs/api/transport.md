@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.transport — Transport protocol, SerialTransport for hardware, FakeTransport for tests, and serial settings.
+---
+
 # `alicatlib.transport`
 
 The `Transport` Protocol, `SerialTransport` for hardware, and

@@ -1,3 +1,7 @@
+---
+description: Python async and sync library for the full Alicat instrument matrix — mass flow meters, flow controllers, pressure meters, pressure controllers, and CODA Coriolis devices.
+---
+
 # alicatlib
 
 Python library for the full Alicat instrument matrix — flow meters, flow

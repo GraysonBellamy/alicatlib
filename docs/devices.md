@@ -1,3 +1,7 @@
+---
+description: Alicat device facades in alicatlib — FlowMeter, FlowController, PressureMeter, PressureController — with model-prefix routing, DeviceKind, and Medium handling.
+---
+
 # Devices
 
 Every Alicat device routes through one of five facades based on its

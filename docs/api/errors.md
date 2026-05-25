@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.errors — typed AlicatError exception hierarchy and structured ErrorContext metadata.
+---
+
 # `alicatlib.errors`
 
 Typed exception hierarchy. Every exception raised by the library is a

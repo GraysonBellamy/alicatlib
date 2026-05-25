@@ -1,3 +1,7 @@
+---
+description: How alicatlib parses Alicat poll responses — DataFrameFormat layouts, ??D discovery, typed engineering-unit fields, and Reading objects.
+---
+
 # Readings
 
 The Alicat poll response — the `<uid>\r` command's reply — is a

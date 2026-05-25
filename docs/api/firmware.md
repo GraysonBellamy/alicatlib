@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.firmware — FirmwareVersion and FirmwareFamily for family-aware parsing and ordering of Alicat firmware revisions.
+---
+
 # `alicatlib.firmware`
 
 `FirmwareVersion` and `FirmwareFamily` — family-aware parsing and

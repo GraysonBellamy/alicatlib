@@ -1,3 +1,7 @@
+---
+description: Streaming-mode acquisition with alicatlib — StreamingSession, port-level state transition, producer loop, frame parsing, and teardown contract.
+---
+
 # Streaming mode
 
 Streaming mode is a **port-level state transition**, not a

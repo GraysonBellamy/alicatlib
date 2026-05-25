@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.commands — Command base class, request and response models, Capability, ResponseMode, and DecodeContext.
+---
+
 # `alicatlib.commands`
 
 Declarative command specs plus request / response models. See

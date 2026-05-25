@@ -1,3 +1,7 @@
+---
+description: Hardware-free testing for alicatlib — FakeTransport, fixture-file replay, device_matrix.yaml, pytest fixtures, and the hardware-tier strategy.
+---
+
 # Testing
 
 95%+ of the test suite runs with no hardware attached —

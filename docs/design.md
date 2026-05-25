@@ -1,3 +1,7 @@
+---
+description: alicatlib v1 architecture specification — transport, protocol client, command layer, devices, recorder, sinks, sync facade, and testing strategy.
+---
+
 # alicatlib Design Document
 
 **Status:** v1 architecture specification with hardware-validation

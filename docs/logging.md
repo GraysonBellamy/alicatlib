@@ -1,3 +1,7 @@
+---
+description: Recorder, SampleSink protocol, first-party CSV / JSONL / SQLite / Parquet / Postgres sinks, backpressure, and structured log events in alicatlib.
+---
+
 # Logging and acquisition
 
 This page covers everything downstream of a command's reply: the

@@ -1,3 +1,7 @@
+---
+description: Troubleshooting checklist for opening, polling, and streaming Alicat devices — typed exceptions, timeouts, discovery, and serial-link error recovery.
+---
+
 # Troubleshooting
 
 A checklist for the common failure modes when opening, polling, or

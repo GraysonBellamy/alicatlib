@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.sinks — SampleSink protocol, pipe() driver, and InMemory / CSV / JSONL / SQLite / Parquet / Postgres sinks.
+---
+
 # `alicatlib.sinks`
 
 The `SampleSink` protocol, `pipe()` driver, and first-party sinks.

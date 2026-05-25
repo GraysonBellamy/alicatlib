@@ -1,3 +1,7 @@
+---
+description: Catalog of alicatlib Command subclasses with firmware, device-kind, media, capability, and destructive-flag gates enforced before serial dispatch.
+---
+
 # Commands
 
 Every Alicat command is one [`Command`](../src/alicatlib/commands/base.py#L152)

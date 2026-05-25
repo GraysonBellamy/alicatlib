@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.protocol — single-in-flight protocol client, wire parsers, and framing helpers.
+---
+
 # `alicatlib.protocol`
 
 Single-in-flight protocol client, wire parsers, and framing helpers.

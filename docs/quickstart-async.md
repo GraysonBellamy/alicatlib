@@ -1,3 +1,7 @@
+---
+description: Async Python quickstart for Alicat mass flow and pressure devices — open_device, poll readings, set gas, and write setpoints with anyio.
+---
+
 # Async quickstart
 
 ```python

@@ -1,3 +1,7 @@
+---
+description: Safety rules for driving Alicat hardware with alicatlib — confirm=True for destructive operations, setpoint validation, and binding constraints.
+---
+
 # Safety
 
 `alicatlib` drives physical hardware. Safety rules are binding; see the

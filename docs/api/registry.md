@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.registry — Gas, Unit, Statistic, and LoopControlVariable registries generated from the Alicat primer.
+---
+
 # `alicatlib.registry`
 
 Primer-verified registries of gases, units, statistics, and

@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.sync — blocking facade over the async core, with parity for every public async name.
+---
+
 # `alicatlib.sync`
 
 Sync facade over the async core. Every public async name has a sync

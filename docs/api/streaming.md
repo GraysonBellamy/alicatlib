@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.streaming — Sample, record(), OverflowPolicy, AcquisitionSummary, and PollSource.
+---
+
 # `alicatlib.streaming`
 
 Sample type and `record()` — the absolute-target acquisition

@@ -1,3 +1,7 @@
+---
+description: Sync Python quickstart for Alicat devices via alicatlib.sync.Alicat — a blocking facade over the async core for scripts, notebooks, and REPL sessions.
+---
+
 # Sync quickstart
 
 The async core is canonical (see [Async quickstart](quickstart-async.md)).

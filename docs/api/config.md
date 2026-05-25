@@ -1,3 +1,7 @@
+---
+description: API reference for alicatlib.config — AlicatConfig configuration container and the config_from_env loader.
+---
+
 # `alicatlib.config`
 
 `AlicatConfig` and the `config_from_env` loader. See

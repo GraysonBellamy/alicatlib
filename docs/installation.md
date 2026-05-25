@@ -1,3 +1,7 @@
+---
+description: Install alicatlib from PyPI on Python 3.13+, with optional extras for Parquet, Postgres, docs, and the full dev toolchain.
+---
+
 # Installation
 
 ```bash
