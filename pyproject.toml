@@ -49,7 +49,7 @@ docs = [
 [project.urls]
 Homepage = "https://github.com/GraysonBellamy/alicatlib"
 Repository = "https://github.com/GraysonBellamy/alicatlib"
-Documentation = "https://GraysonBellamy.github.io/alicatlib/"
+Documentation = "https://graysonbellamy.github.io/alicatlib/"
 Issues = "https://github.com/GraysonBellamy/alicatlib/issues"
 Changelog = "https://github.com/GraysonBellamy/alicatlib/blob/main/CHANGELOG.md"
 
