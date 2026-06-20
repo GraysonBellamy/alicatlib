@@ -289,7 +289,7 @@ async def find_devices(
 
     async with anyio.create_task_group() as tg:
         for index, (port, unit_id, baudrate) in enumerate(combinations):
-            tg.start_soon(_run, index, port, unit_id, baudrate)
+            _ = tg.start_soon(_run, index, port, unit_id, baudrate)
 
     # ``None`` entries are skipped-by-design under ``stop_on_first_hit``;
     # otherwise every slot is populated because the task group only

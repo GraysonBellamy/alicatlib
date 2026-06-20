@@ -34,7 +34,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "anyio>=4.13",
+    "anyio>=4.14",
     "anyserial>=0.1,<0.2",
 ]
 

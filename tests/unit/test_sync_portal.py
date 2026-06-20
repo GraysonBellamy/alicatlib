@@ -85,7 +85,7 @@ class TestCall:
 
         async def outer() -> None:
             async with anyio.create_task_group() as tg:
-                tg.start_soon(inner)
+                _ = tg.start_soon(inner)
 
         with SyncPortal() as portal, pytest.raises(AlicatTimeoutError, match="timeout"):
             portal.call(outer)
@@ -99,8 +99,8 @@ class TestCall:
 
         async def outer() -> None:
             async with anyio.create_task_group() as tg:
-                tg.start_soon(fail_a)
-                tg.start_soon(fail_b)
+                _ = tg.start_soon(fail_a)
+                _ = tg.start_soon(fail_b)
 
         with SyncPortal() as portal, pytest.raises(BaseExceptionGroup) as excinfo:
             portal.call(outer)
@@ -199,7 +199,7 @@ class TestRunSync:
 
         async def outer() -> None:
             async with anyio.create_task_group() as tg:
-                tg.start_soon(inner)
+                _ = tg.start_soon(inner)
 
         with pytest.raises(AlicatTimeoutError, match="boom"):
             run_sync(outer)

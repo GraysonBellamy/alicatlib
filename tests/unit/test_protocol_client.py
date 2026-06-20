@@ -241,8 +241,8 @@ class TestOneInFlight:
             end_times.append(anyio.current_time() - loop_start)
 
         async with anyio.create_task_group() as tg:
-            tg.start_soon(caller, b"A\r")
-            tg.start_soon(caller, b"B\r")
+            _ = tg.start_soon(caller, b"A\r")
+            _ = tg.start_soon(caller, b"B\r")
 
         # Exactly two calls ran.
         assert len(start_times) == 2

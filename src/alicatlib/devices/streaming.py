@@ -237,7 +237,7 @@ class StreamingSession:
         )
         task_group = anyio.create_task_group()
         await task_group.__aenter__()
-        task_group.start_soon(self._producer_loop)
+        _ = task_group.start_soon(self._producer_loop)
         self._task_group = task_group
         return self
 
