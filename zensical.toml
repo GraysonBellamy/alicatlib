@@ -1,7 +1,7 @@
 [project]
 site_name = "alicatlib"
 site_description = "Python library for Alicat mass flow meters and controllers."
-site_url = "https://graysonbellamy.github.io/alicatlib/"
+site_url = "https://alicatlib.graysonbellamy.dev/"
 repo_url = "https://github.com/GraysonBellamy/alicatlib"
 repo_name = "GraysonBellamy/alicatlib"
 edit_uri = "edit/main/docs/"
