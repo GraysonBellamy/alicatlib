@@ -33,6 +33,9 @@ def main() -> None:
         ):
             summary = pipe(recording, sink)
 
+    # finished_at is None only while the recording is in flight; pipe()
+    # has returned, so the producer has shut down and stamped it.
+    assert summary.finished_at is not None
     print(f"wrote {output}")
     print(f"  started_at:      {summary.started_at.isoformat()}")
     print(f"  finished_at:     {summary.finished_at.isoformat()}")

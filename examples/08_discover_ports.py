@@ -4,7 +4,8 @@
 Prints the OS-visible serial ports, then runs the identification
 pipeline across ``ports × unit_ids × baudrates`` and tabulates each
 attempt. ``find_devices`` never raises — every combination ends up in
-the result tuple, either ok (with ``info``) or failed (with ``error``).
+the result tuple, either ok (with ``device_info``) or failed (with
+``error``).
 
 Set ``FAST=1`` to enable ``stop_on_first_hit`` — once a port responds at
 one baud, other bauds for that port are skipped. Cuts sweep time roughly
@@ -49,12 +50,14 @@ def main() -> None:
     print("-" * len(header))
     for r in results:
         if r.ok:
-            assert r.info is not None
-            status = f"ok  {r.info.model} ({r.info.firmware})"
+            assert r.device_info is not None
+            status = f"ok  {r.device_info.model} ({r.device_info.firmware})"
         else:
             assert r.error is not None
             status = f"err {type(r.error).__name__}"
-        print(f"{r.port:<20} {r.unit_id:<4} {r.baudrate:>6}  {status}")
+        uid = "?" if r.address is None else str(r.address)
+        baud = "?" if r.baudrate is None else str(r.baudrate)
+        print(f"{r.port:<20} {uid:<4} {baud:>6}  {status}")
 
 
 if __name__ == "__main__":

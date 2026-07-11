@@ -40,15 +40,14 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping
 
-from alicatlib.devices.data_frame import (
-    DataFrame,
+from alicatlib.devices.models import StatusCode
+from alicatlib.devices.reading import (
     DataFrameField,
     DataFrameFormat,
     DataFrameFormatFlavor,
     ParsedFrame,
+    Reading,
 )
-
-from alicatlib.devices.models import StatusCode
 from alicatlib.registry import Statistic
 from alicatlib.sinks import (
     CsvSink,
@@ -90,21 +89,21 @@ def _fabricate_sample(i: int, base: datetime) -> Sample:
         values_by_statistic={Statistic.MASS_FLOW: value},
         status=frozenset[StatusCode](),
     )
-    frame = DataFrame.from_parsed(
+    reading = Reading.from_parsed(
         parsed,
-        format=_FORMAT,
+        reading_format=_FORMAT,
         received_at=when,
-        monotonic_ns=i,
+        t_mono_ns=i,
     )
     return Sample(
         device="fuel",
         unit_id="A",
-        monotonic_ns=i,
+        t_mono_ns=i,
+        t_utc=when + timedelta(milliseconds=2),
         requested_at=when,
         received_at=when + timedelta(milliseconds=5),
-        midpoint_at=when + timedelta(milliseconds=2),
         latency_s=0.005,
-        frame=frame,
+        reading=reading,
     )
 
 
