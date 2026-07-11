@@ -74,7 +74,7 @@ class _BaseAliasRegistry[E: Gas | Statistic | Unit]:
                 f"cannot coerce {type(value).__name__} to {self._enum_cls.__name__}",
             )
         try:
-            return cast("E", self._enum_cls(value))  # pyright: ignore[reportUnnecessaryCast]
+            return self._enum_cls(value)
         except ValueError:
             pass
         if value in self._aliases:
