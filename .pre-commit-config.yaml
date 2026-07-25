@@ -20,8 +20,11 @@ repos:
       - id: debug-statements
       - id: detect-private-key
 
+  # Keep in step with the `ruff` pin in the dev dependency group — CI runs
+  # `uv run ruff`, so a lagging hook rev means rules that stabilized in the
+  # newer ruff (e.g. PLR0917 in 0.16) pass locally and fail in CI.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.11
+    rev: v0.16.0
     hooks:
       - id: ruff-check
         args: ["--fix", "--exit-non-zero-on-fix"]

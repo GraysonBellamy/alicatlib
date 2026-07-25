@@ -44,6 +44,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
+from functools import partial
 from time import monotonic_ns
 from typing import TYPE_CHECKING, Protocol
 
@@ -278,14 +279,16 @@ async def record(
 
     async with anyio.create_task_group() as tg, receive_stream:
         _ = tg.start_soon(
-            _run_producer,
-            source,
-            send_stream,
-            period,
-            total_ticks,
-            names,
-            overflow,
-            summary,
+            partial(
+                _run_producer,
+                source,
+                send_stream=send_stream,
+                period=period,
+                total_ticks=total_ticks,
+                names=names,
+                overflow=overflow,
+                summary=summary,
+            )
         )
         try:
             yield recording
@@ -313,6 +316,7 @@ async def record(
 
 async def _run_producer(
     source: PollSource,
+    *,
     send_stream: MemoryObjectSendStream[Mapping[str, Sample]],
     period: float,
     total_ticks: int | None,
@@ -321,6 +325,10 @@ async def _run_producer(
     summary: AcquisitionSummary,
 ) -> None:
     """Drive the absolute-cadence poll loop.
+
+    Everything past ``source`` is keyword-only; the caller binds them
+    with :func:`functools.partial` before handing the coroutine to
+    ``start_soon`` (AnyIO's own recommended idiom for keyword args).
 
     Scheduling uses :func:`anyio.current_time` (AnyIO's internal
     monotonic) so ``anyio.sleep_until`` interprets targets against

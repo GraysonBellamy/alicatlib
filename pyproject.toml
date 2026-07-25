@@ -223,6 +223,14 @@ convention = "google"
 quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
+# Ruff 0.16 promoted Markdown formatting out of preview, so `ruff format`
+# started rewriting the Python blocks in README.md and docs/*.md. The prose
+# docs are hand-laid-out (aligned trailing comments, snippets deliberately
+# wrapped narrower than the 100-col code limit, design.md's spec listings),
+# and the formatter flattens all of that. Code correctness in those blocks is
+# covered elsewhere; keep the formatter to real source files. Drop this
+# exclude to opt the docs in.
+exclude = ["*.md"]
 docstring-code-format = true
 docstring-code-line-length = 88
 
