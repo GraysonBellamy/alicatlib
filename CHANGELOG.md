@@ -6,6 +6,14 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-01
+
+### Changed
+
+- **`anyserial` 0.2 is accepted.** The requirement is now
+  `anyserial>=0.1,<0.3` (was `<0.2`), so alicatlib installs beside libraries
+  that need `anyserial` 0.2. No code changed.
+
 ## [0.3.0] - 2026-05-15
 
 ### Unified Device-Library API (v1)
