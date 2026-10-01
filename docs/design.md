@@ -1344,7 +1344,7 @@ Performance tests are non-default:
 - Build backend: `hatchling`.
 - Environment and lock: `uv`.
 - Python floor: 3.13, required by `anyserial` and parser typing choices.
-- Core runtime dependencies: `anyio>=4.13`, `anyserial>=0.1,<0.2`.
+- Core runtime dependencies: `anyio>=4.14`, `anyserial>=0.1,<0.3`.
 - Optional extras:
 
 ```toml
