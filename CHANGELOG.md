@@ -6,6 +6,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-01
+
 ### Changed
 
 - **`anyserial` 0.2 is accepted.** The requirement is now
