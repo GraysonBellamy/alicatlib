@@ -6,6 +6,18 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Discovery recognises a device left in streaming mode.** `probe` /
+  `find_devices` now listen briefly before writing; if data frames arrive
+  unprompted the result carries `AlicatStreamingModeError` and nothing is
+  sent to the device. Previously the streamed frame was read as the `VE`
+  reply, so `+014.79` was reported as firmware `14v79`. Under
+  `stop_on_first_hit`, a streaming result pins the port's baud.
+- **`VE` replies are checked against the queried unit id.** A reply whose
+  first token isn't the unit id raises `AlicatUnitIdMismatchError` instead
+  of being parsed for a firmware version.
+
 ## [0.3.1] - 2026-10-01
 
 ### Changed

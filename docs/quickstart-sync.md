@@ -92,12 +92,12 @@ from alicatlib.sync import find_devices, list_serial_ports
 print(list_serial_ports())
 for result in find_devices(unit_ids=("A", "B"), timeout=0.2):
     if result.ok:
-        print(result.info.model, result.port, result.baudrate)
+        print(result.device_info.model, result.port, result.baudrate)
 ```
 
 [`find_devices`](../src/alicatlib/sync/discovery.py) runs the same
 cross-product sweep as the async side and returns
-[`DiscoveryResult`](../src/alicatlib/devices/discovery.py#L71) objects —
+[`DiscoveryResult`](../src/alicatlib/devices/discovery.py) objects —
 one per `(port, unit_id, baudrate)` combination tried. Individual
 failures never raise; filter on `result.ok`. See
 [troubleshooting.md §Discovering devices on a bus](troubleshooting.md#discovering-devices-on-a-bus).
