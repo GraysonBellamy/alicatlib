@@ -23,6 +23,7 @@ Design reference: ``docs/design.md`` §5.12.
 from __future__ import annotations
 
 import contextlib
+import re
 from dataclasses import dataclass
 from itertools import product
 from time import monotonic
@@ -32,7 +33,7 @@ import anyio
 import anyserial
 
 from alicatlib.devices.factory import identify_device
-from alicatlib.errors import AlicatError
+from alicatlib.errors import AlicatError, AlicatStreamingModeError, ErrorContext
 from alicatlib.protocol.client import AlicatProtocolClient
 from alicatlib.transport.base import SerialSettings
 from alicatlib.transport.serial import SerialTransport
@@ -68,6 +69,20 @@ _DEFAULT_PROBE_TIMEOUT_S: Final[float] = 0.2
 #: product of a big sweep (10 ports × 2 baud × 5 unit ids = 100) from
 #: saturating the system. Bounded by :class:`anyio.CapacityLimiter`.
 _DEFAULT_MAX_CONCURRENCY: Final[int] = 8
+
+#: Passive listen window before a probe writes anything. A streaming
+#: device pushes frames unprompted and ignores ``VE`` / ``??M*``.
+_STREAM_SNIFF_WINDOW_S: Final[float] = 0.1
+
+#: Byte cap on the sniff — a hot stream never goes idle, so the read
+#: must stop on size.
+_STREAM_SNIFF_MAX_BYTES: Final[int] = 256
+
+#: A signed decimal as Alicat prints it in data frames (``+014.79``).
+#: :data:`_FRAME_MIN_DECIMALS` or more on one printable-ASCII line is a
+#: data frame; baud-mismatch noise doesn't decode to that.
+_FRAME_DECIMAL_RE: Final[re.Pattern[bytes]] = re.compile(rb"[+-]\d+\.\d+")
+_FRAME_MIN_DECIMALS: Final[int] = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +130,39 @@ async def list_serial_ports() -> list[str]:
     return [port.device for port in await anyserial.list_serial_ports()]
 
 
+def _find_stream_frame(prelude: bytes) -> bytes | None:
+    """Return the first Alicat data frame in unsolicited bytes, if any.
+
+    Interior lines are preferred since the first and last segments of a
+    capped read are usually partial frames.
+    """
+    lines = prelude.split(b"\r")
+    for line in lines[1:-1] or lines:
+        if not line.isascii() or not line.strip().decode("ascii").isprintable():
+            continue
+        if len(_FRAME_DECIMAL_RE.findall(line)) >= _FRAME_MIN_DECIMALS:
+            return line
+    return None
+
+
+async def _sniff_for_stream(client: AlicatProtocolClient) -> bytes | None:
+    """Listen without writing; return a captured data frame if the bus is streaming.
+
+    Never sends anything — discovery reports a streaming device rather
+    than stopping it, since ``@@ <id>`` persistently reassigns the
+    device's unit id and would cut off whatever is consuming the stream.
+    """
+    try:
+        prelude = await client.transport.read_available(
+            idle_timeout=_STREAM_SNIFF_WINDOW_S,
+            max_bytes=_STREAM_SNIFF_MAX_BYTES,
+        )
+    except AlicatError:
+        # Identification will surface a clearer transport error.
+        return None
+    return _find_stream_frame(prelude)
+
+
 async def _probe_with_client(
     client: AlicatProtocolClient,
     *,
@@ -129,10 +177,34 @@ async def _probe_with_client(
     path with :class:`FakeTransport` — :class:`SerialTransport` doesn't
     test-inject cleanly, and the identification logic is the interesting
     part of probing.
+
+    A device found streaming during the pre-probe sniff short-circuits
+    to an :class:`AlicatStreamingModeError` result without any writes.
     """
     from alicatlib.protocol import ProtocolKind  # noqa: PLC0415 — avoid import cycle at module load
 
     start = monotonic() if started_mono is None else started_mono
+    frame = await _sniff_for_stream(client)
+    if frame is not None:
+        return DiscoveryResult(
+            port=port,
+            address=unit_id,
+            baudrate=baudrate,
+            protocol=ProtocolKind.ASCII,
+            device_info=None,
+            error=AlicatStreamingModeError(
+                f"device on {port} at {baudrate} baud is in streaming mode (sending "
+                f"data frames unprompted); stop it with '@@ {unit_id}' or open it via "
+                f"open_device(..., unit_id={unit_id!r}), which does so by default",
+                context=ErrorContext(
+                    port=port,
+                    unit_id=unit_id,
+                    raw_response=frame,
+                    extra={"baudrate": baudrate},
+                ),
+            ),
+            elapsed_s=monotonic() - start,
+        )
     try:
         info = await identify_device(client, unit_id)
     except AlicatError as err:
@@ -170,6 +242,10 @@ async def probe(
     set. Opening errors (permission denied, port busy, no such device)
     are caught here the same as identification errors; the caller sees
     one shape whether the device is offline, misconfigured, or silent.
+
+    A device left in streaming mode is reported as
+    :class:`AlicatStreamingModeError` and is not written to — the probe
+    listens for :data:`_STREAM_SNIFF_WINDOW_S` before sending ``VE``.
     """
     from alicatlib.protocol import ProtocolKind  # noqa: PLC0415 — avoid import cycle at module load
 
@@ -244,8 +320,10 @@ async def find_devices(
     concurrency ceiling meaningful.
 
     When ``stop_on_first_hit`` is ``True``, a successful probe at
-    ``(port, _, baud)`` records ``baud`` as that port's confirmed rate
-    and any pending same-port probe at a different baud is skipped.
+    ``(port, _, baud)`` — or one that finds the bus streaming
+    (:class:`AlicatStreamingModeError`) — records ``baud`` as that
+    port's confirmed rate and any pending same-port probe at a
+    different baud is skipped.
     Same-baud probes at other unit ids still run (important for RS-485
     multi-drop buses where several devices share a port at a single
     baud). Skipped combinations are simply omitted from the result
@@ -284,7 +362,11 @@ async def find_devices(
                     timeout=timeout,
                 )
             results[index] = result
-            if stop_on_first_hit and result.ok:
+            # A streaming hit also pins the baud: frames only decode at
+            # the rate the bus is actually running.
+            if stop_on_first_hit and (
+                result.ok or isinstance(result.error, AlicatStreamingModeError)
+            ):
                 confirmed_baud[port] = baudrate
 
     async with anyio.create_task_group() as tg:

@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 from alicatlib.commands.base import Command, DecodeContext, ResponseMode
 from alicatlib.devices.kind import DeviceKind
 from alicatlib.devices.models import ManufacturingInfo
+from alicatlib.errors import AlicatUnitIdMismatchError, ErrorContext
 from alicatlib.firmware import FirmwareFamily, FirmwareVersion
 from alicatlib.protocol.parser import (
     parse_data_frame_table,
@@ -129,14 +130,23 @@ class VeCommand(Command[VeRequest, VeResult]):
         ctx: DecodeContext,
     ) -> VeResult:
         """Parse the firmware version (and optional date) out of a ``VE`` reply."""
-        del ctx
         if isinstance(response, tuple):
             raise TypeError(
                 f"{self.name}.decode expected single-line response, got {len(response)} lines",
             )
         # Unit ID is the first whitespace-delimited token; parse_ve_response
-        # scans the whole line for firmware + optional date.
+        # scans the whole line for firmware + optional date. Checking the id
+        # first keeps a stray data frame from being parsed as a version.
         first_token = response.split(None, 1)[0].decode("ascii", errors="replace")
+        if first_token != ctx.unit_id:
+            raise AlicatUnitIdMismatchError(
+                f"VE: reply unit id {first_token!r} does not match {ctx.unit_id!r}",
+                context=ErrorContext(
+                    command_name="VE",
+                    unit_id=ctx.unit_id,
+                    raw_response=response,
+                ),
+            )
         firmware, firmware_date = parse_ve_response(response)
         return VeResult(
             unit_id=first_token,

@@ -29,6 +29,7 @@ from alicatlib.commands.system import MIN_FIRMWARE_MANUFACTURING_INFO
 from alicatlib.devices import DeviceKind
 from alicatlib.devices.models import ManufacturingInfo
 from alicatlib.devices.reading import DataFrameFormat
+from alicatlib.errors import AlicatUnitIdMismatchError
 from alicatlib.firmware import FirmwareFamily, FirmwareVersion
 
 
@@ -72,8 +73,17 @@ class TestVeQueryDecode:
         assert result.firmware_date is None
 
     def test_unit_id_captured_from_first_token(self) -> None:
-        result = VE_QUERY.decode(b"B 9v00 2013-07-15", _ctx())
+        result = VE_QUERY.decode(b"B 9v00 2013-07-15", _ctx(unit_id="B"))
         assert result.unit_id == "B"
+
+    def test_mismatched_unit_id_rejected(self) -> None:
+        with pytest.raises(AlicatUnitIdMismatchError):
+            VE_QUERY.decode(b"B 9v00 2013-07-15", _ctx())
+
+    def test_data_frame_not_parsed_as_firmware(self) -> None:
+        """A streamed frame's ``+014.79`` must not read as firmware ``14v79``."""
+        with pytest.raises(AlicatUnitIdMismatchError):
+            VE_QUERY.decode(b" +014.79 +021.69 +000.00 +000.00 +000.00    Air", _ctx())
 
     def test_multiline_response_rejected(self) -> None:
         """A LINE command must not be given a tuple of lines."""

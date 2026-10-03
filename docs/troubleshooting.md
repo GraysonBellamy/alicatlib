@@ -71,7 +71,7 @@ results = await find_devices(
 )
 for r in results:
     if r.ok:
-        print(r.info.model, r.info.firmware, r.port, r.baudrate, r.unit_id)
+        print(r.device_info.model, r.device_info.firmware, r.port, r.baudrate, r.address)
 ```
 
 [`find_devices`](../src/alicatlib/devices/discovery.py) runs
@@ -79,12 +79,18 @@ for r in results:
 of `ports × unit_ids × baudrates`, bounded by a `CapacityLimiter`
 (default 8 concurrent opens). Individual probe failures never raise
 from `find_devices` — every combination produces a
-[`DiscoveryResult`](../src/alicatlib/devices/discovery.py#L71), and
+[`DiscoveryResult`](../src/alicatlib/devices/discovery.py), and
 the caller filters on `result.ok`.
 
 Default baudrates are `(19200, 115200)` — Alicat factory default plus
 the most common alternative after `NCB`. Widen via the `baudrates`
 kwarg when you have devices at other rates.
+
+A device left in streaming mode comes back with
+`AlicatStreamingModeError` at the baud it's streaming on. Discovery
+doesn't stop the stream (that reassigns the unit id and cuts off any
+other consumer); open it with `open_device`, which sends `@@ <unit_id>`
+by default, or send that yourself.
 
 ## Timeouts
 
