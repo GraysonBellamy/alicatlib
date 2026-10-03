@@ -27,7 +27,7 @@ from alicatlib.devices.discovery import (
     list_serial_ports,
 )
 from alicatlib.devices.models import DeviceInfo
-from alicatlib.errors import AlicatTimeoutError
+from alicatlib.errors import AlicatStreamingModeError, AlicatTimeoutError
 from alicatlib.firmware import FirmwareVersion
 from alicatlib.protocol import AlicatProtocolClient, ProtocolKind
 from alicatlib.transport import FakeTransport
@@ -74,10 +74,18 @@ def _happy_script() -> dict[bytes, bytes]:
 
 async def _make_client(
     script: Mapping[bytes, ScriptedReply] | None = None,
+    *,
+    unsolicited: bytes = b"",
 ) -> AlicatProtocolClient:
     fake = FakeTransport(script, label="fake://test")
     await fake.open()
+    fake.feed(unsolicited)
     return AlicatProtocolClient(fake, multiline_idle_timeout=0.01, default_timeout=0.1)
+
+
+_STREAM_FRAMES = b"014.79 +021.69 +000.00 +000.00 +000.00    Air\r" + (
+    b" +014.79 +021.69 +000.00 +000.00 +000.00    Air\r" * 4
+)
 
 
 def _fake_info(model: str = "MC-100SCCM-D") -> DeviceInfo:
@@ -221,6 +229,49 @@ class TestProbeWithClient:
         # The error's message mentions model_hint so the operator knows
         # the remediation.
         assert "model_hint" in str(result.error)
+
+    @pytest.mark.anyio
+    async def test_streaming_device_reported_without_writes(self) -> None:
+        """A device pushing frames unprompted is reported, not identified or stopped."""
+        client = await _make_client(_happy_script(), unsolicited=_STREAM_FRAMES)
+        result = await _probe_with_client(
+            client,
+            port="COM7",
+            unit_id="A",
+            baudrate=115200,
+        )
+        assert not result.ok
+        assert isinstance(result.error, AlicatStreamingModeError)
+        assert result.error.context.raw_response == (
+            b" +014.79 +021.69 +000.00 +000.00 +000.00    Air"
+        )
+        assert "@@ A" in str(result.error)
+        assert isinstance(client.transport, FakeTransport)
+        assert client.transport.writes == ()
+
+    @pytest.mark.anyio
+    async def test_line_noise_does_not_count_as_streaming(self) -> None:
+        """Baud-mismatch garbage falls through to normal identification."""
+        client = await _make_client(_happy_script(), unsolicited=b"\x00\xf8\x80\xfe~\r\x00")
+        result = await _probe_with_client(
+            client,
+            port="/dev/ttyUSB0",
+            unit_id="A",
+            baudrate=19200,
+        )
+        assert result.ok
+
+    @pytest.mark.anyio
+    async def test_stale_reply_does_not_count_as_streaming(self) -> None:
+        """A late ``VE`` reply left on the line has no signed decimals."""
+        client = await _make_client(_happy_script(), unsolicited=b"A 10v05 2021-05-19\r")
+        result = await _probe_with_client(
+            client,
+            port="/dev/ttyUSB0",
+            unit_id="A",
+            baudrate=19200,
+        )
+        assert result.ok
 
     @pytest.mark.anyio
     async def test_unit_id_echoed_on_error(self) -> None:
@@ -639,6 +690,44 @@ class TestFindDevices:
         assert winning_baud in (19200, 115200)
         # Both unit ids were probed at the winning baud.
         assert {c[1] for c in calls} == {"A", "B"}
+
+    @pytest.mark.anyio
+    async def test_stop_on_first_hit_streaming_pins_baud(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A streaming result proves the bus baud, so other bauds are skipped."""
+        calls: list[tuple[str, str, int]] = []
+
+        async def fake_probe(
+            port: str,
+            *,
+            unit_id: str = "A",
+            baudrate: int = 19200,
+            timeout: float = 0.2,
+        ) -> DiscoveryResult:
+            del timeout
+            calls.append((port, unit_id, baudrate))
+            return DiscoveryResult(
+                port=port,
+                address=unit_id,
+                baudrate=baudrate,
+                device_info=None,
+                error=AlicatStreamingModeError("streaming"),
+                protocol=ProtocolKind.ASCII,
+                elapsed_s=0.0,
+            )
+
+        monkeypatch.setattr(discovery, "probe", fake_probe)
+        results = await find_devices(
+            ports=["/dev/ttyUSB0"],
+            unit_ids=("A",),
+            baudrates=(19200, 115200),
+            stop_on_first_hit=True,
+        )
+        assert len(calls) == 1
+        assert len(results) == 1
+        assert isinstance(results[0].error, AlicatStreamingModeError)
 
     @pytest.mark.anyio
     async def test_stop_on_first_hit_default_false_preserves_full_sweep(

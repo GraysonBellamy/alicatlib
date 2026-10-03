@@ -374,7 +374,11 @@ class AlicatCommandRejectedError(AlicatProtocolError):
 
 
 class AlicatStreamingModeError(AlicatProtocolError):
-    """A request/response command was attempted while the client was in streaming mode."""
+    """Request/response I/O is blocked because the port is in streaming mode.
+
+    Raised when a command is attempted while a streaming session holds
+    the port, and by discovery when a probed device is already streaming.
+    """
 
 
 class AlicatUnitIdMismatchError(AlicatProtocolError):
