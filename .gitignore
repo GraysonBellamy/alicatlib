@@ -76,3 +76,6 @@ Thumbs.db
 # source-controlled, but tests may emit temporary files)
 /tmp/
 /_scratch/
+
+# scripts/pid_autotune.py default output directory
+/autotune_runs/
