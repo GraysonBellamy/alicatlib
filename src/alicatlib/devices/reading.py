@@ -181,7 +181,7 @@ class DataFrameFormat:
             AlicatParseError: Empty frame, non-ASCII bytes, or not enough
                 tokens to cover the required fields.
         """
-        from alicatlib.protocol.framing import decode_ascii  # noqa: PLC0415, I001 — see top-of-module note
+        from alicatlib.protocol.framing import decode_ascii  # noqa: PLC0415 — see top-of-module note
 
         text = decode_ascii(raw)
         tokens = text.split()
