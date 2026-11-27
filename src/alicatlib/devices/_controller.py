@@ -147,7 +147,7 @@ class _ControllerMixin(Device):
           to probe the setpoint source, so the library cannot cache
           it and the analog-source guard never fires. On those
           devices, if the front panel has the setpoint source set to
-          Analog or User, the legacy ``S <value>`` write reaches the
+          Analog or User, the legacy ``S`` write reaches the
           wire cleanly but the device silently ignores it — the
           setpoint follows the analog input instead. The wire bytes
           are correct and the decoder returns a valid

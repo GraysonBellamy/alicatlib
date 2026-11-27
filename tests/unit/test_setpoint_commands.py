@@ -158,6 +158,15 @@ class TestSetpointLegacyEncode:
             data_frame_format=_mc_frame_format(),
         )
         out = SETPOINT_LEGACY.encode(ctx, SetpointLegacyRequest(value=50.0))
+        assert out == b"AS50.0\r"
+
+    def test_v8_keeps_space(self) -> None:
+        ctx = DecodeContext(
+            unit_id="A",
+            firmware=FirmwareVersion.parse("8v30"),
+            data_frame_format=_mc_frame_format(),
+        )
+        out = SETPOINT_LEGACY.encode(ctx, SetpointLegacyRequest(value=50.0))
         assert out == b"AS 50.0\r"
 
     def test_gp_prefix(self, ctx_gp_with_format: DecodeContext) -> None:

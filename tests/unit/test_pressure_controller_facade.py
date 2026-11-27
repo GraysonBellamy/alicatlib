@@ -203,7 +203,7 @@ class TestSetpointFacade:
     async def test_legacy_dispatch_on_v7(self) -> None:
         """Pre-9v00 firmware → legacy ``S`` path on pressure controllers too."""
         session = await _make_session(
-            {b"AS 30.0\r": b"A +30.0 +30.0\r"},
+            {b"AS30.0\r": b"A +30.0 +30.0\r"},
             firmware="7v99",
         )
         dev = PressureController(session)

@@ -6,8 +6,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-27
+
 ### Fixed
 
+- **Legacy setpoints take effect on 1v-7v firmware.** `S` is now sent as
+  `AS100.0`, with no space after the token. An MC-500SCCM-D on 5v12
+  answered `AS 100.0` with a normal data frame but set its setpoint to 0,
+  so `setpoint(value=...)` silently did nothing. Only 5v12 has been
+  checked with the new form; pre-9v00 8v-9v firmware keeps the space and
+  has not been checked either way.
 - **Discovery recognises a device left in streaming mode.** `probe` /
   `find_devices` now listen briefly before writing; if data frames arrive
   unprompted the result carries `AlicatStreamingModeError` and nothing is

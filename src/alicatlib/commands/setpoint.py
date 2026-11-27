@@ -284,10 +284,16 @@ class SetpointLegacy(Command[SetpointLegacyRequest, "ParsedFrame"]):
     max_firmware: FirmwareVersion | None = _MAX_FIRMWARE_SETPOINT_LEGACY_V8V9
 
     def encode(self, ctx: DecodeContext, request: SetpointLegacyRequest) -> bytes:
-        r"""Emit ``<unit_id><prefix>S <value>\r``."""
+        r"""Emit ``<unit_id><prefix>S <value>\r``, with no space on 1v-7v.
+
+        1v-7v firmware treats ``S <value>`` as a setpoint of 0 while still
+        replying with a normal data frame, so the value must follow the
+        token directly.
+        """
         prefix = ctx.command_prefix.decode("ascii")
         value_s = _format_setpoint_value(request.value)
-        return f"{ctx.unit_id}{prefix}{self.token} {value_s}\r".encode("ascii")
+        sep = "" if ctx.firmware.family is FirmwareFamily.V1_V7 else " "
+        return f"{ctx.unit_id}{prefix}{self.token}{sep}{value_s}\r".encode("ascii")
 
     def decode(
         self,
