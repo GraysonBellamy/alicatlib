@@ -6,6 +6,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-27
+
 ### Fixed
 
 - **Legacy setpoints take effect on 1v-7v firmware.** `S` is now sent as
