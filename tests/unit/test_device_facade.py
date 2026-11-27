@@ -480,7 +480,7 @@ class TestSetpointFacade:
     async def test_legacy_dispatch_on_v7(self) -> None:
         """Pre-9v00 firmware → legacy ``S`` path."""
         session = await _make_session(
-            {b"AS 75.0\r": b"A +14.70 +25.0 +45.0 +45.0 +75.0 N2\r"},
+            {b"AS75.0\r": b"A +14.70 +25.0 +45.0 +45.0 +75.0 N2\r"},
             firmware="7v99",
             with_frame_format=True,
         )
@@ -501,7 +501,7 @@ class TestSetpointFacade:
         or every legacy-family setpoint write fails to round-trip.
         """
         fake = FakeTransport(
-            {b"AS 75.0\r": b"A +14.70 +25.0 +45.0 +45.0 +75.0 N2\r"},
+            {b"AS75.0\r": b"A +14.70 +25.0 +45.0 +45.0 +75.0 N2\r"},
             label="fake://test",
         )
         await fake.open()
